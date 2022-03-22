@@ -88,23 +88,33 @@ public class NatsConnection : IAsyncDisposable
         return command.AsValueTask();
     }
 
-    /// <summary>Send PONG message to Server.</summary>
-    internal void Pong()
+    // TODO:SubscribeAsync?
+
+    public void Publish<T>(T value)
+    {
+        
+    }
+
+    public IDisposable Subscribe<T>(string key, Action<T> handler)
+    {
+        return subscriptionManager.Add(key, handler);
+    }
+
+    // internal commands.
+
+    internal void PostPong()
     {
         socketWriter.Post(PongCommand.Create());
     }
 
-    // SubscribeAsync???
-
-    public void Subscribe<T>(string key, int subscriptionId, Action<T> handler)
+    internal void PostSubscribe(int subscriptionId, string subject)
     {
-        // SubscribeCommand.Create(
+        socketWriter.Post(SubscribeCommand.Create(subscriptionId, subject));
     }
 
-    public void Subscribe(NatsKey natsKey)
+    internal void PostUnsubscribe(int subscriptionId)
     {
-
-
+        socketWriter.Post(UnsubscribeCommand.Create(subscriptionId));
     }
 
     // when receives PONG, signal PING Promise.

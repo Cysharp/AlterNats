@@ -1,32 +1,37 @@
 ﻿namespace AlterNats.Commands;
 
-internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
+internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 {
     NatsKey? subject;
     int subscriptionId;
+    T? value;
+    INatsSerializer? serializer;
 
-    SubscribeCommand()
+    PublishCommand()
     {
     }
 
-    public static SubscribeCommand Create(int subscriptionId, string subject)
+    // TODO:queue-group
+
+    public static PublishCommand<T> Create(int subscriptionId, string subject)
     {
         if (!pool.TryPop(out var result))
         {
-            result = new SubscribeCommand();
+            result = new PublishCommand<T>();
         }
 
         result.subject = new NatsKey(subject); // TODO:use specified overload.
         result.subscriptionId = subscriptionId;
+        // TODO:set serializer and T value
 
         return result;
     }
 
-    public static SubscribeCommand Create(int subscriptionId, NatsKey subject)
+    public static PublishCommand<T> Create(int subscriptionId, NatsKey subject)
     {
         if (!pool.TryPop(out var result))
         {
-            result = new SubscribeCommand();
+            result = new PublishCommand<T>();
         }
 
         result.subject = subject;
@@ -35,11 +40,12 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
         return result;
     }
 
-    public override string WriteTraceMessage => "Write SUB Command to buffer.";
+    public override string WriteTraceMessage => "Write PUB Command to buffer.";
 
     public override void Write(ProtocolWriter writer)
     {
-        writer.WriteSubscribe(subscriptionId, subject!);
+        // TODO: WritePublish
+        //writer.WritePublish(subject,);
     }
 
     public override void Return()

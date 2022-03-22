@@ -236,12 +236,40 @@ internal sealed class ProtocolWriter
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#unsub
     // UNSUB <sid> [max_msgs]
-    public void WriteUnsubscribe()
+    public void WriteUnsubscribe(int subscriptionId, int? maxMessages)
     {
-        // TODO:imple
-        throw new NotImplementedException();
-    }
+        var offset = 0;
+        var maxLength = CommandConstants.UnsubWithPadding.Length
+            + MaxIntStringLength
+            + ((maxMessages != null) ? (1 + MaxIntStringLength) : 0)
+            + NewLineLength;
 
+        var writableSpan = writer.GetSpan(maxLength);
+        CommandConstants.UnsubWithPadding.CopyTo(writableSpan);
+        offset += CommandConstants.UnsubWithPadding.Length;
+
+        if (!Utf8Formatter.TryFormat(subscriptionId, writableSpan.Slice(offset), out var written))
+        {
+            throw new Exception(); // TODO: exception
+        }
+        offset += written;
+
+        if (maxMessages != null)
+        {
+            writableSpan.Slice(offset)[0] = (byte)' ';
+            offset += 1;
+            if (!Utf8Formatter.TryFormat(maxMessages.Value, writableSpan.Slice(offset), out written))
+            {
+                throw new Exception(); // TODO: exception
+            }
+            offset += written;
+        }
+
+        CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
+        offset += CommandConstants.NewLine.Length;
+
+        writer.Advance(offset);
+    }
 
     void WriteConstant(ReadOnlySpan<byte> constant)
     {

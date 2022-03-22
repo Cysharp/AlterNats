@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace AlterNats;
@@ -31,7 +32,7 @@ public sealed record NatsOptions
         Host: DefaultHost,
         Port: DefaultPort,
         ConnectOptions: ConnectOptions.Default,
-        Serializer: new JsonNatsSerializer(new JsonSerializerOptions()),
+        Serializer: new JsonNatsSerializer(new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),
         LoggerFactory: NullLoggerFactory.Instance,
         MaxBatchCount: DefaultMaxBatchCount,
         ReaderBufferSize: DefaultReaderBufferSize);
@@ -40,6 +41,7 @@ public sealed record NatsOptions
 
 public interface INatsSerializer
 {
+    public void Serializer<T>(IBufferWriter<byte> bufferWriter, T? value);
     public T? Deserialize<T>(ReadOnlySequence<byte> buffer);
 }
 
@@ -47,9 +49,32 @@ public class JsonNatsSerializer : INatsSerializer
 {
     readonly JsonSerializerOptions options;
 
+    [ThreadStatic]
+    static Utf8JsonWriter? jsonWriter;
+
     public JsonNatsSerializer(JsonSerializerOptions options)
     {
         this.options = options;
+    }
+
+    public void Serializer<T>(IBufferWriter<byte> bufferWriter, T? value)
+    {
+        Utf8JsonWriter writer;
+        if (jsonWriter == null)
+        {
+            writer = jsonWriter = new Utf8JsonWriter(bufferWriter, new JsonWriterOptions
+            {
+                Indented = false,
+                SkipValidation = true
+            });
+        }
+        else
+        {
+            writer = jsonWriter;
+            writer.Reset(bufferWriter);
+        }
+
+        JsonSerializer.Serialize(writer, value, options);
     }
 
     public T? Deserialize<T>(ReadOnlySequence<byte> buffer)

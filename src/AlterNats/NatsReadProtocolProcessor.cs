@@ -179,7 +179,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
             logger.LogTrace("Receive Ping");
 
-            connection.Pong(); // return pong
+            connection.PostPong(); // return pong
 
             if (length < PingSize)
             {

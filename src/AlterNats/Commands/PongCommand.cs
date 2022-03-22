@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
-
-namespace AlterNats.Commands;
+﻿namespace AlterNats.Commands;
 
 internal sealed class PongCommand : CommandBase<PongCommand>
 {
