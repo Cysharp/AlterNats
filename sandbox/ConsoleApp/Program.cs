@@ -1,39 +1,34 @@
 ﻿
 using AlterNats;
 using MessagePack;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System.Buffers;
+using System.IO.Pipelines;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks.Sources;
+using ZLogger;
+
+var provider = new ServiceCollection()
+    .AddLogging(x =>
+    {
+        x.ClearProviders();
+        x.SetMinimumLevel(LogLevel.Trace);
+        x.AddZLoggerConsole();
+    })
+    .BuildServiceProvider();
+
+var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+
+var conn = new NatsConnection(NatsOptions.Default with { LoggerFactory = loggerFactory });
 
 
-
-
-
-
-await using var conn = new NatsConnection();
-
-//Console.WriteLine("GO PING");
-var t = Foo();
-//var b = conn.PingAsync();
-//var c = conn.PingAsync();
-//var d = conn.PingAsync();
-//var e = conn.PingAsync();
-//// await a;
-//await b;
-//await c;
-//await d;
-//await e;
-//Console.WriteLine("END PING");
-
-
-Console.ReadLine();
-
-await t;
-
-Console.ReadLine();
-
-
-async Task Foo()
+for (int i = 0; i < 10000; i++)
 {
-    await conn.PingAsync();
-    throw new Exception("YEAH?");
+    conn.Ping();
 }
+
+
+Console.WriteLine("READ STOP");
+Console.ReadLine();

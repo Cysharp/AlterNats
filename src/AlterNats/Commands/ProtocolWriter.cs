@@ -1,6 +1,4 @@
-﻿using System.Buffers.Binary;
-using System.Buffers.Text;
-using System.IO.Pipelines;
+﻿using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
 
@@ -11,9 +9,9 @@ internal sealed class ProtocolWriter
     const int MaxIntStringLength = 10; // int.MaxValue.ToString().Length
     const int NewLineLength = 2; // \r\n
 
-    readonly PipeWriter writer;
+    readonly FixedArrayBufferWriter writer; // where T : IBufferWriter<byte>
 
-    public ProtocolWriter(PipeWriter writer)
+    public ProtocolWriter(FixedArrayBufferWriter writer)
     {
         this.writer = writer;
     }

@@ -12,10 +12,12 @@ internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
     TSelf? nextNode;
     public ref TSelf? NextNode => ref nextNode;
 
+    public abstract string WriteTraceMessage { get; }
+
     public virtual void Return()
     {
         pool.TryPush(Unsafe.As<TSelf>(this));
     }
 
-    public abstract void Write(ILogger logger, ProtocolWriter writer);
+    public abstract void Write(ProtocolWriter writer);
 }

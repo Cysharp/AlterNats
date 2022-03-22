@@ -14,13 +14,19 @@ public sealed record NatsOptions
 (
     INatsSerializer Serializer,
     ILoggerFactory LoggerFactory,
-    int MaxBatchCount
+    int MaxBatchCount,
+    int ReaderBufferSize
 )
 {
     const int DefaultMaxBatchCount = 100;
+    const int DefaultReaderBufferSize = 1048576; // 1MB
 
     // TODO:not null, default serializer
-    public static NatsOptions Default = new NatsOptions(new JsonNatsSerializer(new JsonSerializerOptions()), NullLoggerFactory.Instance, DefaultMaxBatchCount);
+    public static NatsOptions Default = new NatsOptions(
+        Serializer: new JsonNatsSerializer(new JsonSerializerOptions()), 
+        LoggerFactory: NullLoggerFactory.Instance,
+        MaxBatchCount: DefaultMaxBatchCount, 
+        ReaderBufferSize: DefaultReaderBufferSize);
 
 }
 

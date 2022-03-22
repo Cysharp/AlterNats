@@ -29,10 +29,10 @@ internal sealed class PingCommand : CommandBase<PingCommand>, IValueTaskSource, 
         return result;
     }
 
-    public override void Write(ILogger logger, ProtocolWriter writer)
-    {
-        logger.LogTrace("Write PONG Command to buffer.");
+    public override string WriteTraceMessage => "Write PING Command to buffer.";
 
+    public override void Write(ProtocolWriter writer)
+    {
         if (queue != null)
         {
             lock (queue)
@@ -112,5 +112,29 @@ internal sealed class PingCommand : CommandBase<PingCommand>, IValueTaskSource, 
     void IThreadPoolWorkItem.Execute()
     {
         core.SetResult(null!);
+    }
+}
+
+
+internal sealed class LightPingCommand : CommandBase<LightPingCommand>
+{
+    LightPingCommand()
+    {
+    }
+
+    public static LightPingCommand Create()
+    {
+        if (!pool.TryPop(out var result))
+        {
+            result = new LightPingCommand();
+        }
+        return result;
+    }
+
+    public override string WriteTraceMessage => "Write PING Command to buffer.";
+
+    public override void Write(ProtocolWriter writer)
+    {
+        writer.WritePing();
     }
 }

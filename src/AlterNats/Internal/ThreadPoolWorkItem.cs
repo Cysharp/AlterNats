@@ -44,7 +44,7 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem, IObjectPoolNo
             {
                 call.Invoke(v);
             }
-            catch (Exception ex)
+            catch
             {
                 // TODO: do nanika(logging?)
             }

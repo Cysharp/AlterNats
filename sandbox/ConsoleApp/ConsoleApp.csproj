@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="2.3.85" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
+    <PackageReference Include="ZLogger" Version="1.6.1" />
   </ItemGroup>
 
   <ItemGroup>

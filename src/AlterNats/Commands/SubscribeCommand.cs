@@ -24,9 +24,11 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
         return result;
     }
 
-    public override void Write(ILogger logger, ProtocolWriter writer)
+    public override string WriteTraceMessage => throw new NotImplementedException();
+
+    public override void Write(ProtocolWriter writer)
     {
-        logger.LogTrace("Write SUB Command to buffer.");
+        // logger.LogTrace("Write SUB Command to buffer.");
         writer.WriteSubscribe(subscriptionId, subject!);
     }
 

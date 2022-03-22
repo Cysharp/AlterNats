@@ -7,5 +7,6 @@ namespace AlterNats.Commands;
 internal interface ICommand
 {
     void Return();
-    void Write(ILogger logger, ProtocolWriter writer);
+    void Write(ProtocolWriter writer);
+    string WriteTraceMessage { get; }
 }
