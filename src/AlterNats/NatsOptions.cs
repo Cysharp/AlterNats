@@ -12,20 +12,28 @@ namespace AlterNats;
 
 public sealed record NatsOptions
 (
+    string Host,
+    int Port,
+    ConnectOptions ConnectOptions,
     INatsSerializer Serializer,
     ILoggerFactory LoggerFactory,
     int MaxBatchCount,
     int ReaderBufferSize
 )
 {
+    const string DefaultHost = "localhost";
+    const int DefaultPort = 4222;
     const int DefaultMaxBatchCount = 100;
     const int DefaultReaderBufferSize = 1048576; // 1MB
 
     // TODO:not null, default serializer
     public static NatsOptions Default = new NatsOptions(
-        Serializer: new JsonNatsSerializer(new JsonSerializerOptions()), 
+        Host: DefaultHost,
+        Port: DefaultPort,
+        ConnectOptions: ConnectOptions.Default,
+        Serializer: new JsonNatsSerializer(new JsonSerializerOptions()),
         LoggerFactory: NullLoggerFactory.Instance,
-        MaxBatchCount: DefaultMaxBatchCount, 
+        MaxBatchCount: DefaultMaxBatchCount,
         ReaderBufferSize: DefaultReaderBufferSize);
 
 }

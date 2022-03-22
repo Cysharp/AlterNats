@@ -6,6 +6,8 @@ namespace AlterNats;
 // https://github.com/nats-io/nats-server/blob/a23b1b7/server/client.go#L536
 public sealed record ConnectOptions
 {
+    public static ConnectOptions Default = new ConnectOptions();
+
     /// <summary>Optional boolean. If set to true, the server (version 1.2.0+) will not send originating messages from this connection to its own subscriptions. Clients should set this to true only for server supporting this feature, which is when proto in the INFO protocol is set to at least 1.</summary>
     [JsonPropertyName("echo")]
     public bool Echo { get; init; }
@@ -68,7 +70,7 @@ public sealed record ConnectOptions
     public bool? AccountNew { get; init; }
 
     [JsonPropertyName("headers")]
-    public bool Headers { get; init; } = true;
+    public bool Headers { get; init; } = true; // if set to false and NoResponders failed CONNECT command and closed connection from server
 
     [JsonPropertyName("no_responders")]
     public bool NoResponders { get; init; } = true;

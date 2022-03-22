@@ -20,6 +20,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     readonly PipeReader reader;
     readonly Task receiveLoop;
     readonly Task consumeLoop;
+    readonly CancellationTokenSource cancellationTokenSource;
     readonly ILogger<NatsReadProtocolProcessor> logger;
 
     public NatsReadProtocolProcessor(Socket socket, NatsConnection connection)
@@ -27,8 +28,9 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         this.socket = socket;
         this.connection = connection;
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
+        this.cancellationTokenSource = new CancellationTokenSource();
 
-        // TODO: set threadhold
+        // TODO: set threshold
         var pipe = new Pipe(new PipeOptions(useSynchronizationContext: false));
         this.reader = pipe.Reader;
         this.writer = pipe.Writer;
@@ -40,14 +42,22 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     // receive data from socket and write to Pipe.
     async Task ReciveLoopAsync()
     {
-        int read = 0;
+        try
+        {
+            await connection.WaitForConnect.WaitAsync(cancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         while (true)
         {
             var buffer = writer.GetMemory(connection.Options.ReaderBufferSize);
             try
             {
                 logger.LogTrace("Start Socket Read"); // TODO: if-trace
-                read = await socket.ReceiveAsync(buffer, SocketFlags.None);
+                var read = await socket.ReceiveAsync(buffer, SocketFlags.None, cancellationTokenSource.Token);
                 if (read == 0)
                 {
                     break; // complete.
@@ -56,10 +66,10 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 logger.LogTrace("Receive: {0} B", read); // TODO: if-trace
                 writer.Advance(read);
             }
-            catch
+            catch (Exception ex)
             {
-                // TODO: LogError???
-                break;
+                logger.LogError(ex, "Error occured during receive loop.");
+                return; // ???
             }
 
             var result = await writer.FlushAsync();
@@ -76,6 +86,15 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     // read data from pipe and consume message.
     async Task ConsumeLoopAsync()
     {
+        try
+        {
+            await connection.WaitForConnect.WaitAsync(cancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         while (true)
         {
             try
@@ -83,7 +102,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var readResult = await reader.ReadAtLeastAsync(4);
                 var buffer = readResult.Buffer;
 
-                logger.LogTrace(buffer.Length.ToString());
                 while (buffer.Length > 0)
                 {
                     var first = buffer.First;
@@ -113,6 +131,8 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error occured during read loop.");
+                // TODO:return?
+                return;
             }
         }
     }
@@ -176,7 +196,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             const int PongSize = 6; // PONG\r\n
 
             // TODO: PONG TRACE
-            // logger.LogTrace("Receive Pong");
+            logger.LogTrace("Receive Pong");
 
             if (length < PongSize)
             {
@@ -322,6 +342,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        cancellationTokenSource.Cancel();
         await writer.CompleteAsync();
         await reader.CompleteAsync(); // TODO:check stop behaviour
         await receiveLoop;

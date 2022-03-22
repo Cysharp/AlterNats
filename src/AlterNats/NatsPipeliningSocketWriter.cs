@@ -79,6 +79,7 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
                         // SendAsync(ReadOnlyMemory) is very efficient, internally using AwaitableAsyncSocketEventArgs
                         // should use cancellation token?, currently no, wait for flush complete.
                         await socket.SendAsync(bufferWriter.WrittenMemory, SocketFlags.None).ConfigureAwait(false);
+                        bufferWriter.Reset();
 
                         if (isEnabledTraceLogging)
                         {

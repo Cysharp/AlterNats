@@ -21,14 +21,19 @@ var provider = new ServiceCollection()
 
 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
 
-var conn = new NatsConnection(NatsOptions.Default with { LoggerFactory = loggerFactory });
-
-
-for (int i = 0; i < 10000; i++)
+await using var conn = new NatsConnection(NatsOptions.Default with
 {
-    conn.Ping();
-}
+    LoggerFactory = loggerFactory,
+    ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = true }
+});
+
+await conn.ConnectAsync();
 
 
-Console.WriteLine("READ STOP");
+
+conn.Ping();
+
+
+
+
 Console.ReadLine();

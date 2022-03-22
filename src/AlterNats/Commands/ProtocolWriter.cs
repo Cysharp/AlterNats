@@ -1,6 +1,7 @@
 ﻿using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AlterNats.Commands;
 
@@ -23,7 +24,10 @@ internal sealed class ProtocolWriter
         WriteConstant(CommandConstants.ConnectWithPadding);
 
         var jsonWriter = new Utf8JsonWriter(writer);
-        JsonSerializer.Serialize(jsonWriter, options);
+        JsonSerializer.Serialize(jsonWriter, options, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
 
         WriteConstant(CommandConstants.NewLine);
     }
