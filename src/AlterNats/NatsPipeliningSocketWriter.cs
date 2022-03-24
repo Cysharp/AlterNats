@@ -40,7 +40,7 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
         var reader = channel.Reader;
         var protocolWriter = new ProtocolWriter(bufferWriter);
         var logger = options.LoggerFactory.CreateLogger<NatsPipeliningSocketWriter>();
-        var writeBufferSize = options.WriteBufferSize;
+        var writerBufferSize = options.WriterBufferSize;
         var promiseList = new List<IPromise>(100);
         var isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
 
@@ -50,7 +50,7 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
             {
                 try
                 {
-                    while (bufferWriter.WrittenCount < writeBufferSize && reader.TryRead(out var command))
+                    while (bufferWriter.WrittenCount < writerBufferSize && reader.TryRead(out var command))
                     {
                         if (isEnabledTraceLogging)
                         {

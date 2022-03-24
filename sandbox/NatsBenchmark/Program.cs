@@ -169,8 +169,9 @@ namespace NatsBenchmark
             //runPub("PubOnly8k", 100000, 1024 * 8);
 
             //runPubSub("PubSubNo", 10000000, 0);
-            runPubSub("PubSub8b", 10000000, 8);
+            //runPubSub("PubSub8b", 10000000, 8);
             //runPubSub("PubSub32b", 10000000, 32);
+            runPubSub("PubSub100b", 10000000, 100);
             //runPubSub("PubSub256b", 10000000, 256);
             //runPubSub("PubSub512b", 500000, 512);
             //runPubSub("PubSub1k", 500000, 1024);
@@ -179,7 +180,8 @@ namespace NatsBenchmark
 
             // TODO:Support No publish
             // RunPubSubAlterNats("PubSubNo", 10000000, 0);
-            RunPubSubAlterNats("AlterNats", 10000000, 8);
+            //RunPubSubAlterNats("AlterNats", 10000000, 8);
+            RunPubSubAlterNats("AlterNats100", 10000000, 100);
             //RunPubSubAlterNats("PubSub8b", 10000000, 8);
             //RunPubSubAlterNats("PubSub32b", 10000000, 32);
             //RunPubSubAlterNats("PubSub256b", 10000000, 256);
@@ -189,7 +191,8 @@ namespace NatsBenchmark
             //RunPubSubAlterNats("PubSub8k", 100000, 1024 * 8);
 
             // Redis?
-             RunPubSubRedis("StackExchange.Redis", 10000000, 8);
+            // RunPubSubRedis("StackExchange.Redis", 10000000, 8);
+            RunPubSubRedis("Redis 100", 10000000, 100);
 
             // These run significantly slower.
             // req->server->reply->server->req

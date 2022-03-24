@@ -18,14 +18,14 @@ public sealed record NatsOptions
     ConnectOptions ConnectOptions,
     INatsSerializer Serializer,
     ILoggerFactory LoggerFactory,
-    int WriteBufferSize,
+    int WriterBufferSize,
     int ReaderBufferSize,
     bool UseThreadPoolCallback
 )
 {
     const string DefaultHost = "localhost";
     const int DefaultPort = 4222;
-    const int DefaultWriteBufferSize = 32768;
+    const int DefaultWriterBufferSize = 32768;
     const int DefaultReaderBufferSize = 1048576; // 1MB
 
     // TODO:not null, default serializer
@@ -35,7 +35,7 @@ public sealed record NatsOptions
         ConnectOptions: ConnectOptions.Default,
         Serializer: new JsonNatsSerializer(new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),
         LoggerFactory: NullLoggerFactory.Instance,
-        WriteBufferSize: DefaultWriteBufferSize,
+        WriterBufferSize: DefaultWriterBufferSize,
         ReaderBufferSize: DefaultReaderBufferSize,
         UseThreadPoolCallback: false);
 
