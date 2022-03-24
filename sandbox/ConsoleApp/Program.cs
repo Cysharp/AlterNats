@@ -23,10 +23,11 @@ await using var conn = new NatsConnection(NatsOptions.Default with
 
 await conn.ConnectAsync();
 
-conn.Subscribe<byte[]>("takoyaki", x => Console.WriteLine("RECEIVE:" + Encoding.UTF8.GetString(x)));
+//conn.Subscribe<byte[]>("takoyaki", x => Console.WriteLine("RECEIVE:" + Encoding.UTF8.GetString(x)));
+conn.Subscribe<string>("takoyaki", x => Console.WriteLine("RECEIVE:" + x));
 
 
-conn.Publish("takoyaki", Encoding.UTF8.GetBytes("NO MORE MORE YES"));
+conn.Publish("takoyaki", "NO MORE MORE YES");
 
 
 Console.ReadLine();

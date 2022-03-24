@@ -62,7 +62,14 @@ internal sealed class MessagePublisher<T>
                 {
                     if (callback != null)
                     {
-                        ((Action<T?>)callback).Invoke(value);
+                        try
+                        {
+                            ((Action<T?>)callback).Invoke(value);
+                        }
+                        catch (Exception ex)
+                        {
+                            options!.LoggerFactory.CreateLogger<MessagePublisher<T>>().LogError(ex, "Error occured during publish callback.");
+                        }
                     }
                 }
             }
@@ -116,7 +123,14 @@ internal sealed class ByteArrayMessagePublisher
                 {
                     if (callback != null)
                     {
-                        ((Action<byte[]?>)callback).Invoke(value);
+                        try
+                        {
+                            ((Action<byte[]?>)callback).Invoke(value);
+                        }
+                        catch (Exception ex)
+                        {
+                            options!.LoggerFactory.CreateLogger<ByteArrayMessagePublisher>().LogError(ex, "Error occured during publish callback.");
+                        }
                     }
                 }
             }
@@ -170,7 +184,14 @@ internal sealed class ReadOnlyMemoryMessagePublisher
                 {
                     if (callback != null)
                     {
-                        ((Action<ReadOnlyMemory<byte>>)callback).Invoke(value);
+                        try
+                        {
+                            ((Action<ReadOnlyMemory<byte>>)callback).Invoke(value);
+                        }
+                        catch (Exception ex)
+                        {
+                            options!.LoggerFactory.CreateLogger<ReadOnlyMemoryMessagePublisher>().LogError(ex, "Error occured during publish callback.");
+                        }
                     }
                 }
             }
