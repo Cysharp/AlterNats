@@ -40,8 +40,8 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
         var reader = channel.Reader;
         var protocolWriter = new ProtocolWriter(bufferWriter);
         var logger = options.LoggerFactory.CreateLogger<NatsPipeliningSocketWriter>();
-        var maxBatchCount = options.MaxBatchCount;
-        var promiseList = new List<IPromise>(options.MaxBatchCount);
+        var writeBufferSize = options.WriteBufferSize;
+        var promiseList = new List<IPromise>(100);
         var isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
 
         try
@@ -50,9 +50,7 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
             {
                 try
                 {
-                    // TODO:buffer
-                    var writeCount = 0;
-                    while (++writeCount != maxBatchCount && reader.TryRead(out var command))
+                    while (bufferWriter.WrittenCount < writeBufferSize && reader.TryRead(out var command))
                     {
                         if (isEnabledTraceLogging)
                         {
@@ -75,7 +73,7 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
                     {
                         if (isEnabledTraceLogging)
                         {
-                            logger.LogTrace("Write loop start Flush.");
+                            logger.LogTrace("Write loop start Flush. WriteSize: {0}", bufferWriter.WrittenCount);
                         }
 
                         // SendAsync(ReadOnlyMemory) is very efficient, internally using AwaitableAsyncSocketEventArgs

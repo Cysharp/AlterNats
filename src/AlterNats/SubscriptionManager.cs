@@ -104,8 +104,6 @@ internal sealed class SubscriptionManager : IDisposable
 
 internal sealed class RefCountSubscription
 {
-    // All operation exclude Handlers.GetValues inside in lock
-
     readonly SubscriptionManager manager;
 
     public int SubscriptionId { get; }
@@ -124,6 +122,7 @@ internal sealed class RefCountSubscription
         Handlers = new FreeList<object>();
     }
 
+    // Add is in lock(gate)
     public int AddHandler(object handler)
     {
         var id = Handlers.Add(handler);

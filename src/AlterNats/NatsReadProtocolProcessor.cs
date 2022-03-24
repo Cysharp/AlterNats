@@ -22,6 +22,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     readonly Task consumeLoop;
     readonly CancellationTokenSource cancellationTokenSource;
     readonly ILogger<NatsReadProtocolProcessor> logger;
+    readonly bool isEnabledTraceLogging;
 
     public NatsReadProtocolProcessor(Socket socket, NatsConnection connection)
     {
@@ -29,9 +30,10 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         this.connection = connection;
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
         this.cancellationTokenSource = new CancellationTokenSource();
+        this.isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
 
         // TODO: set threshold
-        var pipe = new Pipe(new PipeOptions(useSynchronizationContext: false));
+        var pipe = new Pipe(new PipeOptions(useSynchronizationContext: false, pauseWriterThreshold: 0));
         this.reader = pipe.Reader;
         this.writer = pipe.Writer;
 
@@ -50,14 +52,17 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             return;
         }
-
         var totalRead = 0;
         while (true)
         {
             var buffer = writer.GetMemory(connection.Options.ReaderBufferSize);
             try
             {
-                logger.LogTrace("Start Socket Read"); // TODO: if-trace
+                if (isEnabledTraceLogging)
+                {
+                    logger.LogTrace("Start Socket Read");
+                }
+
                 var read = await socket.ReceiveAsync(buffer, SocketFlags.None, cancellationTokenSource.Token).ConfigureAwait(false);
                 if (read == 0)
                 {
@@ -66,8 +71,10 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
                 totalRead += read;
 
-                // TODO:Information to Trace
-                logger.LogInformation("Receive Total: {0} B", totalRead); // TODO: if-trace
+                if (isEnabledTraceLogging)
+                {
+                    logger.LogTrace("Socket Receive Read: {0} B, Total: {1}", read, totalRead);
+                }
                 writer.Advance(read);
             }
             catch (Exception ex)
@@ -110,13 +117,30 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 {
                     var first = buffer.First;
 
-                    var code = (first.Length >= 4)
-                        ? GetCode(first.Span)
-                        : GetCode(buffer);
+                    int code;
+                    if (first.Length >= 4)
+                    {
+                        code = GetCode(first.Span);
+                    }
+                    else
+                    {
+                        if (buffer.Length < 4)
+                        {
+                            reader.AdvanceTo(buffer.Start, buffer.End);
+                            readResult = await reader.ReadAtLeastAsync(4).ConfigureAwait(false);
+                            buffer = readResult.Buffer;
+                        }
+                        code = GetCode(buffer);
+                    }
 
                     // Optimize for Msg parsing, Inline async code
                     if (code == ServerOpCodes.Msg)
                     {
+                        if (isEnabledTraceLogging)
+                        {
+                            logger.LogTrace("Receive Msg");
+                        }
+
                         // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg
                         // MSG <subject> <sid> [reply-to] <#bytes>\r\n[payload]
 
@@ -125,7 +149,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         if (positionBeforePayload == null)
                         {
                             reader.AdvanceTo(buffer.Start, buffer.End); // TODO:this advance ok???
-                            (buffer, positionBeforePayload) = await ReadUntilReceiveNewLineAsync();
+                            (buffer, positionBeforePayload) = await ReadUntilReceiveNewLineAsync().ConfigureAwait(false);
                         }
 
                         var msgHeader = buffer.Slice(0, positionBeforePayload.Value);
@@ -134,12 +158,11 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         var payloadBegin = buffer.GetPosition(1, positionBeforePayload.Value);
                         var payloadSlice = buffer.Slice(payloadBegin);
 
-                        if (payloadSlice.Length < payloadLength)
+                        if (payloadSlice.Length < (payloadLength + 2)) // slice required \r\n
                         {
                             // TODO: how handle result?
                             reader.AdvanceTo(payloadBegin);
-                            var readResult2 = await reader.ReadAtLeastAsync(payloadLength);
-
+                            var readResult2 = await reader.ReadAtLeastAsync(payloadLength + 2); // payload + \r\n
                             buffer = readResult2.Buffer;
                             payloadSlice = buffer.Slice(0, payloadLength);
                         }
@@ -150,13 +173,11 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
                         connection.PublishToClientHandlers(subscriptionId, payloadSlice);
 
-                        buffer = buffer.Slice(buffer.GetPosition(1 + payloadLength + 2, positionBeforePayload.Value)); // \n + payload + \r\n
-
-
+                        buffer = buffer.Slice(buffer.GetPosition(2, payloadSlice.End)); // payload + \r\n
                     }
                     else
                     {
-                        buffer = await DispatchCommandAsync(code, buffer);
+                        buffer = await DispatchCommandAsync(code, buffer).ConfigureAwait(false);
                     }
                 }
 

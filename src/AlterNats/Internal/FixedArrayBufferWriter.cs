@@ -10,6 +10,7 @@ internal sealed class FixedArrayBufferWriter : IBufferWriter<byte>
     int written;
 
     public ReadOnlyMemory<byte> WrittenMemory => buffer.AsMemory(0, written);
+    public int WrittenCount => written;
 
     public FixedArrayBufferWriter()
     {

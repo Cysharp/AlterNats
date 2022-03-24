@@ -7,37 +7,35 @@ namespace AlterNats;
 
 internal static class MessagePublisher
 {
-    static readonly Func<Type, IMessagePublisher> createPublisher = CreatePublisher;
-    static readonly ConcurrentDictionary<Type, IMessagePublisher> publisherCache = new();
+    // To avoid boxing, cache generic type and invoke it.
+    static readonly Func<Type, PublishMessage> createPublisher = CreatePublisher;
+    static readonly ConcurrentDictionary<Type, PublishMessage> publisherCache = new();
 
     public static void Publish(Type type, NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
-        publisherCache.GetOrAdd(type, createPublisher).Publish(options, buffer, callbacks);
+        publisherCache.GetOrAdd(type, createPublisher).Invoke(options, buffer, callbacks);
     }
 
-    static IMessagePublisher CreatePublisher(Type type)
+    static PublishMessage CreatePublisher(Type type)
     {
         if (type == typeof(byte[]))
         {
-            return new ByteArrayMessagePublisher();
+            return new ByteArrayMessagePublisher().Publish;
         }
         else if (type == typeof(ReadOnlyMemory<byte>))
         {
-            return new ReadOnlyMemoryMessagePublisher();
+            return new ReadOnlyMemoryMessagePublisher().Publish;
         }
 
         var publisher = typeof(MessagePublisher<>).MakeGenericType(type)!;
-        return (IMessagePublisher)Activator.CreateInstance(publisher)!;
+        var instance = Activator.CreateInstance(publisher)!;
+        return (PublishMessage)Delegate.CreateDelegate(typeof(PublishMessage), instance, "Publish", false);
     }
 }
 
-// To avoid boxing, cache generic type and invoke it.
-internal interface IMessagePublisher
-{
-    void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks);
-}
+internal delegate void PublishMessage(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks);
 
-internal sealed class MessagePublisher<T> : IMessagePublisher
+internal sealed class MessagePublisher<T>
 {
     public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
@@ -58,12 +56,25 @@ internal sealed class MessagePublisher<T> : IMessagePublisher
 
         try
         {
-            foreach (var callback in callbacks!)
+            if (!options.UseThreadPoolCallback)
             {
-                if (callback != null)
+                foreach (var callback in callbacks!)
                 {
-                    var item = ThreadPoolWorkItem<T>.Create((Action<T?>)callback, value);
-                    ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
+                    if (callback != null)
+                    {
+                        ((Action<T?>)callback).Invoke(value);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var callback in callbacks!)
+                {
+                    if (callback != null)
+                    {
+                        var item = ThreadPoolWorkItem<T>.Create((Action<T?>)callback, value);
+                        ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
+                    }
                 }
             }
         }
@@ -78,7 +89,7 @@ internal sealed class MessagePublisher<T> : IMessagePublisher
     }
 }
 
-internal sealed class ByteArrayMessagePublisher : IMessagePublisher
+internal sealed class ByteArrayMessagePublisher
 {
     public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
@@ -99,13 +110,25 @@ internal sealed class ByteArrayMessagePublisher : IMessagePublisher
 
         try
         {
-            foreach (var callback in callbacks!)
+            if (!options.UseThreadPoolCallback)
             {
-                if (callback != null)
+                foreach (var callback in callbacks!)
                 {
-                    var item = ThreadPoolWorkItem<byte[]>.Create((Action<byte[]?>)callback, value);
-                    ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
-                    item.Execute();
+                    if (callback != null)
+                    {
+                        ((Action<byte[]?>)callback).Invoke(value);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var callback in callbacks!)
+                {
+                    if (callback != null)
+                    {
+                        var item = ThreadPoolWorkItem<byte[]>.Create((Action<byte[]?>)callback, value);
+                        ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
+                    }
                 }
             }
         }
@@ -120,7 +143,7 @@ internal sealed class ByteArrayMessagePublisher : IMessagePublisher
     }
 }
 
-internal sealed class ReadOnlyMemoryMessagePublisher : IMessagePublisher
+internal sealed class ReadOnlyMemoryMessagePublisher
 {
     public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
@@ -141,12 +164,25 @@ internal sealed class ReadOnlyMemoryMessagePublisher : IMessagePublisher
 
         try
         {
-            foreach (var callback in callbacks!)
+            if (!options.UseThreadPoolCallback)
             {
-                if (callback != null)
+                foreach (var callback in callbacks!)
                 {
-                    var item = ThreadPoolWorkItem<ReadOnlyMemory<byte>>.Create((Action<ReadOnlyMemory<byte>>)callback, value);
-                    ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
+                    if (callback != null)
+                    {
+                        ((Action<ReadOnlyMemory<byte>>)callback).Invoke(value);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var callback in callbacks!)
+                {
+                    if (callback != null)
+                    {
+                        var item = ThreadPoolWorkItem<ReadOnlyMemory<byte>>.Create((Action<ReadOnlyMemory<byte>>)callback, value);
+                        ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
+                    }
                 }
             }
         }
