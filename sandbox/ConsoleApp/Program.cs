@@ -1,6 +1,7 @@
 ﻿using AlterNats;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text;
 using ZLogger;
 
 var provider = new ServiceCollection()
@@ -22,23 +23,33 @@ await using var conn = new NatsConnection(NatsOptions.Default with
 
 await conn.ConnectAsync();
 
-conn.Ping();
+conn.Subscribe<byte[]>("takoyaki", x => Console.WriteLine("RECEIVE:" + Encoding.UTF8.GetString(x)));
 
-var d1 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received1:{x}"));
-var d2 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received2:{x}"));
-var d3 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received3:{x}"));
 
+conn.Publish("takoyaki", Encoding.UTF8.GetBytes("NO MORE MORE YES"));
+
+
+Console.ReadLine();
+
+//conn.Ping();
+
+//var d1 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received1:{x}"));
+//var d2 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received2:{x}"));
+//var d3 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received3:{x}"));
+
+////d1.Dispose();
+
+//conn.Publish("foo.bar", "tako yaki mix!");
+
+
+
+//Console.ReadLine();
+//Console.WriteLine("Dispose D1 and publish more");
 //d1.Dispose();
 
-conn.Publish("foo.bar", "tako yaki mix!");
+
+//conn.Publish("foo.bar", "new takoyaki don!!!!!!!!!!!!!!!!!!!!");
+
+//Console.ReadLine();
 
 
-
-Console.ReadLine();
-Console.WriteLine("Dispose D1 and publish more");
-d1.Dispose();
-
-
-conn.Publish("foo.bar", "new takoyaki don!!!!!!!!!!!!!!!!!!!!");
-
-Console.ReadLine();

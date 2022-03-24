@@ -48,9 +48,7 @@ internal sealed class ProtocolWriter
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#pub
     // PUB <subject> [reply-to] <#bytes>\r\n[payload]
 
-    // TODO: WritePublishCore ReadOnlySpan will be removed.
-
-    void WritePublishCore(NatsKey subject, NatsKey? replyTo, ReadOnlySpan<byte> payload)
+    public void WritePublish(NatsKey subject, NatsKey? replyTo, ReadOnlySpan<byte> payload)
     {
         var offset = 0;
         var maxLength = CommandConstants.PubWithPadding.Length
@@ -99,7 +97,7 @@ internal sealed class ProtocolWriter
         writer.Advance(offset);
     }
 
-    void WritePublishCore(string subject, string? replyTo, ReadOnlySpan<byte> payload)
+    public void WritePublish(string subject, string? replyTo, ReadOnlySpan<byte> payload)
     {
         var offset = 0;
         var maxLength = CommandConstants.PubWithPadding.Length
@@ -151,6 +149,8 @@ internal sealed class ProtocolWriter
 
         writer.Advance(offset);
     }
+
+    // TODO: string subject, string replyTo
 
     public void WritePublish<T>(NatsKey subject, NatsKey? replyTo, T? value, INatsSerializer serializer)
     {

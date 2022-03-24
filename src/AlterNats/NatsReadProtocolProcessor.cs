@@ -51,19 +51,23 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             return;
         }
 
+        var totalRead = 0;
         while (true)
         {
             var buffer = writer.GetMemory(connection.Options.ReaderBufferSize);
             try
             {
                 logger.LogTrace("Start Socket Read"); // TODO: if-trace
-                var read = await socket.ReceiveAsync(buffer, SocketFlags.None, cancellationTokenSource.Token);
+                var read = await socket.ReceiveAsync(buffer, SocketFlags.None, cancellationTokenSource.Token).ConfigureAwait(false);
                 if (read == 0)
                 {
                     break; // complete.
                 }
 
-                logger.LogTrace("Receive: {0} B", read); // TODO: if-trace
+                totalRead += read;
+
+                // TODO:Information to Trace
+                logger.LogInformation("Receive Total: {0} B", totalRead); // TODO: if-trace
                 writer.Advance(read);
             }
             catch (Exception ex)
@@ -99,7 +103,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             try
             {
-                var readResult = await reader.ReadAtLeastAsync(4);
+                var readResult = await reader.ReadAtLeastAsync(4).ConfigureAwait(false);
                 var buffer = readResult.Buffer;
 
                 while (buffer.Length > 0)
@@ -120,6 +124,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         var positionBeforePayload = buffer.PositionOf((byte)'\n');
                         if (positionBeforePayload == null)
                         {
+                            reader.AdvanceTo(buffer.Start, buffer.End); // TODO:this advance ok???
                             (buffer, positionBeforePayload) = await ReadUntilReceiveNewLineAsync();
                         }
 
@@ -128,6 +133,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
                         var payloadBegin = buffer.GetPosition(1, positionBeforePayload.Value);
                         var payloadSlice = buffer.Slice(payloadBegin);
+
                         if (payloadSlice.Length < payloadLength)
                         {
                             // TODO: how handle result?
@@ -135,7 +141,11 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                             var readResult2 = await reader.ReadAtLeastAsync(payloadLength);
 
                             buffer = readResult2.Buffer;
-                            payloadSlice = buffer;
+                            payloadSlice = buffer.Slice(0, payloadLength);
+                        }
+                        else
+                        {
+                            payloadSlice = payloadSlice.Slice(0, payloadLength); // TODO:reduce slice count?
                         }
 
                         connection.PublishToClientHandlers(subscriptionId, payloadSlice);
