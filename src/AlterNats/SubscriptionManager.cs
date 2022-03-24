@@ -55,16 +55,12 @@ internal sealed class SubscriptionManager : IDisposable
         bySubscriptionId.Remove(subscriptionId, out _);
     }
 
-    public void PublishToClientHandlers(int subscriptionId, ReadOnlySequence<byte> buffer)
+    public void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
     {
         if (bySubscriptionId.TryGetValue(subscriptionId, out var subscription))
         {
             var list = subscription.Handlers.GetValues();
-            if (list.Length != 0)
-            {
-                var item = PublishCallbackThreadPoolWorkItemFactory.Create(subscription.ElementType, connection.Options, buffer, list);
-                ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
-            }
+            MessagePublisher.Publish(subscription.ElementType, connection.Options, buffer, list);
         }
     }
 

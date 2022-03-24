@@ -5,16 +5,22 @@ namespace AlterNats;
 
 public interface INatsSerializer
 {
-    public int Serialize<T>(IBufferWriter<byte> bufferWriter, T? value);
-    public T? Deserialize<T>(ReadOnlySequence<byte> buffer);
+    int Serialize<T>(IBufferWriter<byte> bufferWriter, T? value);
+    T? Deserialize<T>(in ReadOnlySequence<byte> buffer);
 }
 
-public class JsonNatsSerializer : INatsSerializer
+public sealed class JsonNatsSerializer : INatsSerializer
 {
     readonly JsonSerializerOptions options;
 
     [ThreadStatic]
     static Utf8JsonWriter? jsonWriter;
+
+    static readonly JsonWriterOptions JsonWriterOptions = new JsonWriterOptions
+    {
+        Indented = false,
+        SkipValidation = true
+    };
 
     public JsonNatsSerializer(JsonSerializerOptions options)
     {
@@ -26,11 +32,7 @@ public class JsonNatsSerializer : INatsSerializer
         Utf8JsonWriter writer;
         if (jsonWriter == null)
         {
-            writer = jsonWriter = new Utf8JsonWriter(bufferWriter, new JsonWriterOptions
-            {
-                Indented = false,
-                SkipValidation = true
-            });
+            writer = jsonWriter = new Utf8JsonWriter(bufferWriter, JsonWriterOptions);
         }
         else
         {
@@ -45,7 +47,7 @@ public class JsonNatsSerializer : INatsSerializer
         return bytesCommitted;
     }
 
-    public T? Deserialize<T>(ReadOnlySequence<byte> buffer)
+    public T? Deserialize<T>(in ReadOnlySequence<byte> buffer)
     {
         var reader = new Utf8JsonReader(buffer); // Utf8JsonReader is ref struct, no allocate.
         return JsonSerializer.Deserialize<T>(ref reader, options);

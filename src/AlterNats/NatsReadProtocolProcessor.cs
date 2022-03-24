@@ -110,14 +110,42 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         ? GetCode(first.Span)
                         : GetCode(buffer);
 
+                    // Optimize for Msg parsing, Inline async code
                     if (code == ServerOpCodes.Msg)
                     {
-                        // Optimized for Msg, most frequently called type, Inline await in loop.
-                        throw new NotImplementedException();
+                        // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg
+                        // MSG <subject> <sid> [reply-to] <#bytes>\r\n[payload]
+
+                        // Try to find before \n
+                        var positionBeforePayload = buffer.PositionOf((byte)'\n');
+                        if (positionBeforePayload == null)
+                        {
+                            (buffer, positionBeforePayload) = await ReadUntilReceiveNewLineAsync();
+                        }
+
+                        var msgHeader = buffer.Slice(0, positionBeforePayload.Value);
+                        var (subscriptionId, payloadLength) = ParseMessageHeader(msgHeader);
+
+                        var payloadBegin = buffer.GetPosition(1, positionBeforePayload.Value);
+                        var payloadSlice = buffer.Slice(payloadBegin);
+                        if (payloadSlice.Length < payloadLength)
+                        {
+                            // TODO: how handle result?
+                            reader.AdvanceTo(payloadBegin);
+                            var readResult2 = await reader.ReadAtLeastAsync(payloadLength);
+
+                            buffer = readResult2.Buffer;
+                            payloadSlice = buffer;
+                        }
+
+                        connection.PublishToClientHandlers(subscriptionId, payloadSlice);
+
+                        buffer = buffer.Slice(buffer.GetPosition(1 + payloadLength + 2, positionBeforePayload.Value)); // \n + payload + \r\n
+
+
                     }
                     else
                     {
-                        // Others.
                         buffer = await DispatchCommandAsync(code, buffer);
                     }
                 }
@@ -148,6 +176,28 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         Span<byte> buf = stackalloc byte[4];
         sequence.Slice(0, 4).CopyTo(buf);
         return GetCode(buf);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static int GetInt32(ReadOnlySpan<byte> span)
+    {
+        if (!Utf8Parser.TryParse(span, out int value, out var consumed))
+        {
+            throw new Exception(); // throw...
+        }
+        return value;
+    }
+
+    static int GetInt32(in ReadOnlySequence<byte> sequence)
+    {
+        if (sequence.IsSingleSegment || sequence.FirstSpan.Length <= 10)
+        {
+            return GetInt32(sequence.FirstSpan);
+        }
+
+        Span<byte> buf = stackalloc byte[Math.Min((int)sequence.Length, 10)];
+        sequence.Slice(buf.Length).CopyTo(buf);
+        return GetInt32(buf);
     }
 
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
@@ -235,11 +285,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             logger.LogTrace("Receive Info");
 
-            // TODO:log info?
-            //var info = ParseInfo(buffer, out var readSize);
-            //return readSize + buffer.Span.Slice(readSize).IndexOf((byte)'\n') + 1;
-
-
             // try to get \n.
             var position = buffer.PositionOf((byte)'\n');
 
@@ -247,7 +292,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             {
                 reader.AdvanceTo(buffer.Start, buffer.End);
                 var (newBuffer, newPosition) = await ReadUntilReceiveNewLineAsync();
-                // TODO:log serverInfo.
                 var serverInfo = ParseInfo(newBuffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
@@ -275,7 +319,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#info
     // INFO {["option_name":option_value],...}
-    internal static ServerInfo ParseInfo(ReadOnlySequence<byte> buffer)
+    internal static ServerInfo ParseInfo(in ReadOnlySequence<byte> buffer)
     {
         // skip `INFO`
         var jsonReader = new Utf8JsonReader(buffer.Slice(5));
@@ -287,57 +331,54 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg
     // MSG <subject> <sid> [reply-to] <#bytes>\r\n[payload]
-    internal static void ParseMessage(ReadOnlySequence<byte> data, out SequencePosition readPosition, Action<ReadOnlySequence<byte>> callback)
+    static (int subscriptionId, int payloadLength) ParseMessageHeader(ReadOnlySpan<byte> msgHeader)
     {
-        if (data.IsSingleSegment)
+        msgHeader = msgHeader.Slice(4);
+        Split(msgHeader, out var subject, out msgHeader); // subject string no use
+        Split(msgHeader, out var sid, out msgHeader);
+        Split(msgHeader, out var replyToOrBytes, out msgHeader);
+        if (msgHeader.Length == 0)
         {
-            var offset = 0;
-            var buffer = data.FirstSpan.Slice(4);
-
-            offset += Split(buffer, ' ', out var subject, out buffer);
-            offset += Split(buffer, ' ', out var sid, out buffer);
-
-            // reply-to or #bytes, check \n first.
-            var i = buffer.IndexOf((byte)'\n');
-            var i2 = buffer.Slice(0, i).IndexOf((byte)' ');
-            if (i2 == -1)
-            {
-                // not exists reply-to, only #bytes
-                if (!Utf8Parser.TryParse(buffer.Slice(0, i - 1), out int payloadLength, out _))
-                {
-                    throw new Exception(); // todo
-                }
-
-                offset += i + 1;
-                var payload = data.Slice(offset, payloadLength); // create slice of ReadOnlySequence
-                callback(payload);
-
-                var last = buffer.Slice(i + 1 + payloadLength).IndexOf((byte)'\n');
-                readPosition = data.GetPosition(last + 1);
-            }
-            else
-            {
-                throw new NotImplementedException(); // TODO:reply-to!
-            }
+            var subscriptionId = GetInt32(sid);
+            var payloadLength = GetInt32(replyToOrBytes);
+            return (subscriptionId, payloadLength);
         }
         else
         {
-            throw new NotImplementedException(); // TODO:how???
+            // TODO:impl this
+            var replyTo = msgHeader;
+            var bytesSlice = msgHeader;
+            throw new NotImplementedException();
         }
     }
 
-    static int Split(ReadOnlySpan<byte> span, char delimiter, out ReadOnlySpan<byte> left, out ReadOnlySpan<byte> right)
+    unsafe static (int subscriptionId, int payloadLength) ParseMessageHeader(in ReadOnlySequence<byte> msgHeader)
     {
-        var i = span.IndexOf((byte)delimiter);
+        if (msgHeader.IsSingleSegment)
+        {
+            return ParseMessageHeader(msgHeader.FirstSpan);
+        }
+
+        // header parsing use Slice frequently so ReadOnlySequence is high cost, should use Span.
+        // msgheader is not too long, ok to use stackalloc.
+        Span<byte> buffer = stackalloc byte[(int)msgHeader.Length];
+        msgHeader.CopyTo(buffer);
+        return ParseMessageHeader(buffer);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static void Split(ReadOnlySpan<byte> span, out ReadOnlySpan<byte> left, out ReadOnlySpan<byte> right)
+    {
+        var i = span.IndexOf((byte)' ');
         if (i == -1)
         {
-            // TODO:
-            throw new InvalidOperationException();
+            left = span;
+            right = default;
+            return;
         }
 
         left = span.Slice(0, i);
         right = span.Slice(i + 1);
-        return i + 1;
     }
 
     public async ValueTask DisposeAsync()

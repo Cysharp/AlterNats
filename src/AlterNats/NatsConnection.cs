@@ -1,4 +1,5 @@
 ﻿using AlterNats.Commands;
+using System.Buffers;
 using System.Net.Sockets;
 
 namespace AlterNats;
@@ -117,6 +118,11 @@ public class NatsConnection : IAsyncDisposable
     internal void PostUnsubscribe(int subscriptionId)
     {
         socketWriter.Post(UnsubscribeCommand.Create(subscriptionId));
+    }
+
+    internal void PublishToClientHandlers(int subscriptionId,in ReadOnlySequence<byte> buffer)
+    {
+        subscriptionManager.PublishToClientHandlers(subscriptionId, buffer);
     }
 
     // when receives PONG, signal PING Promise.
