@@ -1,4 +1,5 @@
 ﻿using AlterNats.Commands;
+using AlterNats.Internal;
 using Microsoft.Extensions.Logging;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;

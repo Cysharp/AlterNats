@@ -2,6 +2,7 @@
 using AlterNats;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text;
 using ZLogger;
 
 var provider = new ServiceCollection()
@@ -23,23 +24,16 @@ await using var conn = new NatsConnection(NatsOptions.Default with
 
 await conn.ConnectAsync();
 
-
-
 conn.Ping();
 
 var d1 = conn.Subscribe<int>("foo.bar", x => Console.WriteLine($"Received1:{x}"));
-var d2 = conn.Subscribe<int>("foo.bar", x => Console.WriteLine($"Received2:{x}"));
-var d3 = conn.Subscribe<int>("foo.bar", x => Console.WriteLine($"Received3:{x}"));
+//var d2 = conn.Subscribe<int>("foo.bar", x => Console.WriteLine($"Received2:{x}"));
+//var d3 = conn.Subscribe<int>("foo.bar", x => Console.WriteLine($"Received3:{x}"));
 
-d1.Dispose();
+//d1.Dispose();
+
+conn.Publish("foo.bar", "tako yaki mix!");
 
 
-
-
-
-Console.ReadLine();
-
-d2.Dispose();
-d3.Dispose();
 
 Console.ReadLine();

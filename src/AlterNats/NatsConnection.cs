@@ -74,6 +74,7 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(command);
 
         waitForConnectSource.TrySetResult(); // signal connected to NatsReadProtocolProcessor loop
+        // TODO:wait get INFO?
     }
 
     public void Ping()
@@ -90,9 +91,10 @@ public class NatsConnection : IAsyncDisposable
 
     // TODO:SubscribeAsync?
 
-    public void Publish<T>(T value)
+    public void Publish<T>(string key, T value)
     {
-        
+        var command = PublishCommand<T>.Create(key, value, Options.Serializer);
+        socketWriter.Post(command);
     }
 
     public IDisposable Subscribe<T>(string key, Action<T> handler)
@@ -129,7 +131,12 @@ public class NatsConnection : IAsyncDisposable
                 pingQueue.RemoveAt(0);
             }
         }
+    }
 
+    // TODO: to internal
+    public void DirectWrite(string protocol)
+    {
+        socketWriter.Post(new DirectWriteCommand(protocol));
     }
 
     public async ValueTask DisposeAsync()

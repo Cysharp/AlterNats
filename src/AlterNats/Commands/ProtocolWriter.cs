@@ -1,4 +1,5 @@
-﻿using System.Buffers.Text;
+﻿using AlterNats.Internal;
+using System.Buffers.Text;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -46,10 +47,8 @@ internal sealed class ProtocolWriter
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#pub
     // PUB <subject> [reply-to] <#bytes>\r\n[payload]
-    public void WritePublish(NatsKey subject, ReadOnlySpan<byte> payload) => WritePublishCore(subject, null, payload);
-    public void WritePublish(string subject, ReadOnlySpan<byte> payload) => WritePublishCore(subject, null, payload);
-    public void WritePublish(NatsKey subject, NatsKey replyTo, ReadOnlySpan<byte> payload) => WritePublishCore(subject, replyTo, payload);
-    public void WritePublish(string subject, string replyTo, ReadOnlySpan<byte> payload) => WritePublishCore(subject, replyTo, payload);
+
+    // TODO: WritePublishCore ReadOnlySpan will be removed.
 
     void WritePublishCore(NatsKey subject, NatsKey? replyTo, ReadOnlySpan<byte> payload)
     {
@@ -151,6 +150,50 @@ internal sealed class ProtocolWriter
         offset += CommandConstants.NewLine.Length;
 
         writer.Advance(offset);
+    }
+
+    public void WritePublish<T>(NatsKey subject, NatsKey? replyTo, T? value, INatsSerializer serializer)
+    {
+        var offset = 0;
+        var maxLengthWithoutPayload = CommandConstants.PubWithPadding.Length
+            + subject.buffer.Length
+            + (replyTo == null ? 0 : replyTo.buffer.Length)
+            + MaxIntStringLength
+            + NewLineLength;
+
+        var writableSpan = writer.GetSpan(maxLengthWithoutPayload);
+
+        CommandConstants.PubWithPadding.CopyTo(writableSpan);
+        offset += CommandConstants.PubWithPadding.Length;
+
+        subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+        offset += subject.buffer.Length;
+
+        if (replyTo != null)
+        {
+            replyTo.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+            offset += replyTo.buffer.Length;
+        }
+
+        // Advance for written.
+        writer.Advance(offset);
+
+        // preallocate range for write #bytes(write after serialized)
+        var preallocatedRange = writer.PreAllocate(MaxIntStringLength);
+        offset += MaxIntStringLength;
+
+        CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
+        writer.Advance(CommandConstants.NewLine.Length);
+
+        var payloadLength = serializer.Serialize(writer, value);
+        var payloadLengthSpan = writer.GetSpanInPreAllocated(preallocatedRange);
+        payloadLengthSpan.Fill((byte)' ');
+        if (!Utf8Formatter.TryFormat(payloadLength, payloadLengthSpan, out var written))
+        {
+            throw new Exception(); // TODO: exception
+        }
+
+        WriteConstant(CommandConstants.NewLine);
     }
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#sub
@@ -269,6 +312,14 @@ internal sealed class ProtocolWriter
         offset += CommandConstants.NewLine.Length;
 
         writer.Advance(offset);
+    }
+
+    internal void WriteRaw(string protocol)
+    {
+        var encoded = Encoding.UTF8.GetBytes(protocol + "\r\n");
+        var span = writer.GetSpan(encoded.Length);
+        encoded.CopyTo(span);
+        writer.Advance(encoded.Length);
     }
 
     void WriteConstant(ReadOnlySpan<byte> constant)

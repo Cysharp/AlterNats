@@ -3,7 +3,6 @@
 internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 {
     NatsKey? subject;
-    int subscriptionId;
     T? value;
     INatsSerializer? serializer;
 
@@ -11,9 +10,9 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
     {
     }
 
-    // TODO:queue-group
+    // TODO:reply-to
 
-    public static PublishCommand<T> Create(int subscriptionId, string subject)
+    public static PublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
     {
         if (!pool.TryPop(out var result))
         {
@@ -21,13 +20,13 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
         }
 
         result.subject = new NatsKey(subject); // TODO:use specified overload.
-        result.subscriptionId = subscriptionId;
-        // TODO:set serializer and T value
+        result.value = value;
+        result.serializer = serializer;
 
         return result;
     }
 
-    public static PublishCommand<T> Create(int subscriptionId, NatsKey subject)
+    public static PublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
     {
         if (!pool.TryPop(out var result))
         {
@@ -35,7 +34,8 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
         }
 
         result.subject = subject;
-        result.subscriptionId = subscriptionId;
+        result.value = value;
+        result.serializer = serializer;
 
         return result;
     }
@@ -44,13 +44,14 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
     public override void Write(ProtocolWriter writer)
     {
-        // TODO: WritePublish
-        //writer.WritePublish(subject,);
+        writer.WritePublish(subject!, null, value, serializer!);
     }
 
     public override void Return()
     {
         subject = null;
+        value = default;
+        serializer = null;
         base.Return();
     }
 }

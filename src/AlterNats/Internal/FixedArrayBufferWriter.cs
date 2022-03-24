@@ -1,8 +1,9 @@
 ﻿using System.Buffers;
 using System.Runtime.CompilerServices;
 
-namespace AlterNats.Commands;
+namespace AlterNats.Internal;
 
+// similar as ArrayBufferWriter but adds more functional for ProtocolWriter
 internal sealed class FixedArrayBufferWriter : IBufferWriter<byte>
 {
     byte[] buffer;
@@ -14,6 +15,20 @@ internal sealed class FixedArrayBufferWriter : IBufferWriter<byte>
     {
         buffer = new byte[65535];
         written = 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Range PreAllocate(int size)
+    {
+        var range = new Range(written, written + size);
+        Advance(size);
+        return range;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span<byte> GetSpanInPreAllocated(Range range)
+    {
+        return buffer.AsSpan(range);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
