@@ -1,4 +1,6 @@
-﻿using AlterNats;
+﻿#pragma warning disable IDE0044
+
+using AlterNats;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -34,7 +36,7 @@ public class DefaultRun
     ConnectionMultiplexer redis;
     object gate;
     Handler handler;
-    IDisposable subscription;
+    IDisposable subscription = default!;
 
     [GlobalSetup]
     public async Task SetupAsync()

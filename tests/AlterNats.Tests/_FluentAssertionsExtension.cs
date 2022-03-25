@@ -20,6 +20,11 @@ public static class FluentAssertionsExtension
         v.Should().BeFalse();
     }
 
+    public static void ShouldEqual(this IEnumerable<byte> source, params byte[] elements)
+    {
+        source.Should().Equal(elements);
+    }
+
     public static void ShouldEqual<T>(this IEnumerable<T> source, params T[] elements)
     {
         source.Should().Equal(elements);
