@@ -52,6 +52,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             return;
         }
+
         var totalRead = 0;
         while (true)
         {

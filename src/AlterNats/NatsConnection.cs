@@ -98,6 +98,19 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(command);
     }
 
+    public void Publish<T>(NatsKey key, T value)
+    {
+        var command = PublishCommand<T>.Create(key, value, Options.Serializer);
+        socketWriter.Post(command);
+    }
+
+    public ValueTask PublishAsync<T>(NatsKey key, T value)
+    {
+        var command = PublishAsyncCommand<T>.Create(key, value, Options.Serializer);
+        socketWriter.Post(command);
+        return command.AsValueTask();
+    }
+
     // byte[] and ReadOnlyMemory<byte> uses raw publish.
     // TODO:ReadOnlyMemory<byte> overload.
     public void Publish(string key, byte[] value)
@@ -109,6 +122,11 @@ public class NatsConnection : IAsyncDisposable
     public IDisposable Subscribe<T>(string key, Action<T> handler)
     {
         return subscriptionManager.Add(key, handler);
+    }
+
+    public IDisposable Subscribe<T>(NatsKey key, Action<T> handler)
+    {
+        return subscriptionManager.Add(key.Key, handler);
     }
 
     // internal commands.

@@ -81,6 +81,11 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
                         await socket.SendAsync(bufferWriter.WrittenMemory, SocketFlags.None).ConfigureAwait(false);
                         bufferWriter.Reset();
 
+                        foreach (var item in promiseList)
+                        {
+                            item.SetResult();
+                        }
+
                         if (isEnabledTraceLogging)
                         {
                             logger.LogTrace("Write loop complete Flush.");
@@ -94,7 +99,10 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
                             promise.SetException(ex);
                         }
                     }
-                    promiseList.Clear();
+                    finally
+                    {
+                        promiseList.Clear();
+                    }
                 }
                 catch (Exception ex)
                 {

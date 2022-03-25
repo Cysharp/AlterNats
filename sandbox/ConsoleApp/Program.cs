@@ -8,49 +8,49 @@ var provider = new ServiceCollection()
     .AddLogging(x =>
     {
         x.ClearProviders();
-        x.SetMinimumLevel(LogLevel.Trace);
-        x.AddZLoggerConsole();
+        //x.SetMinimumLevel(LogLevel.Information);
+        //x.AddZLoggerConsole();
     })
     .BuildServiceProvider();
 
 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
 
-await using var conn = new NatsConnection(NatsOptions.Default with
+await using var connection = new NatsConnection(NatsOptions.Default with
 {
-    LoggerFactory = loggerFactory,
+    // LoggerFactory = loggerFactory,
     ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
 });
 
-await conn.ConnectAsync();
+await connection.ConnectAsync();
 
-//conn.Subscribe<byte[]>("takoyaki", x => Console.WriteLine("RECEIVE:" + Encoding.UTF8.GetString(x)));
-conn.Subscribe<string>("takoyaki", x => Console.WriteLine("RECEIVE:" + x));
+var key = new NatsKey("foobar");
 
+for (int i = 0; i < 100; i++)
+{
+    await connection.PublishAsync(key, "foobar").ConfigureAwait(false); // cache???
+}
 
-conn.Publish("takoyaki", "NO MORE MORE YES");
+await CalcPublishAsync(key, connection).ConfigureAwait(false);
 
-
-Console.ReadLine();
-
-//conn.Ping();
-
-//var d1 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received1:{x}"));
-//var d2 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received2:{x}"));
-//var d3 = conn.Subscribe<string>("foo.bar", x => Console.WriteLine($"Received3:{x}"));
-
-////d1.Dispose();
-
-//conn.Publish("foo.bar", "tako yaki mix!");
+Console.WriteLine("END");
 
 
 
-//Console.ReadLine();
-//Console.WriteLine("Dispose D1 and publish more");
-//d1.Dispose();
+
+static async ValueTask CalcPublishAsync(NatsKey key, NatsConnection connection)
+{
+    JetBrains.Profiler.Api.MemoryProfiler.ForceGc();
+    JetBrains.Profiler.Api.MemoryProfiler.CollectAllocations(true);
+    JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("Before Publish");
+    await connection.PublishAsync(key, "foobar").ConfigureAwait(false);
+    JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("After Publish");
+}
 
 
-//conn.Publish("foo.bar", "new takoyaki don!!!!!!!!!!!!!!!!!!!!");
 
-//Console.ReadLine();
-
-
+public struct MyVector3
+{
+    public float X;
+    public float Y;
+    public float Z;
+}
