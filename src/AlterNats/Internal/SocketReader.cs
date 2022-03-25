@@ -43,7 +43,6 @@ internal sealed class SocketReader
     readonly int minimumBufferSize;
     readonly SeqeunceBuilder seqeunceBuilder = new SeqeunceBuilder();
 
-
     public SocketReader(Socket socket, int minimumBufferSize, CancellationToken cancellationToken)
     {
 #if DEBUG
@@ -83,42 +82,31 @@ internal sealed class SocketReader
         return seqeunceBuilder.ToReadOnlySequence();
     }
 
-    // ReadAtLeastAsync
-    public ValueTask<ReadOnlySequence<byte>> ReadAtLeastAsync(int minimumSize)
+    [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    public async ValueTask<ReadOnlySequence<byte>> ReadAtLeastAsync(int minimumSize)
     {
-        if (seqeunceBuilder.Count >= minimumSize)
+        var totalRead = 0;
+        do
         {
-            return new ValueTask<ReadOnlySequence<byte>>(seqeunceBuilder.ToReadOnlySequence());
-        }
-
-        return Core(minimumSize);
-
-        [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-        async ValueTask<ReadOnlySequence<byte>> Core(int minimumSize)
-        {
-            var totalRead = 0;
-            do
+            if (availableMemory.Length == 0)
             {
-                if (availableMemory.Length == 0)
-                {
-                    availableMemory = ArrayPool<byte>.Shared.Rent(minimumBufferSize);
-                }
-                var read = await socket.ReceiveAsync(availableMemory, SocketFlags.None, cancellationToken).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    throw new Exception(); // TODO: end of read.
-                }
-                totalRead += read;
-                seqeunceBuilder.Append(availableMemory.Slice(0, read));
-                availableMemory = availableMemory.Slice(read);
-            } while (totalRead < minimumSize);
+                availableMemory = ArrayPool<byte>.Shared.Rent(minimumBufferSize);
+            }
+            var read = await socket.ReceiveAsync(availableMemory, SocketFlags.None, cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                throw new Exception(); // TODO: end of read.
+            }
+            totalRead += read;
+            seqeunceBuilder.Append(availableMemory.Slice(0, read));
+            availableMemory = availableMemory.Slice(read);
+        } while (totalRead < minimumSize);
 
-            return seqeunceBuilder.ToReadOnlySequence();
-        }
+        return seqeunceBuilder.ToReadOnlySequence();
     }
 
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    public async ValueTask<ReadOnlySequence<byte>> ReadUntilReceiveNewLineAsync(int minimumSize)
+    public async ValueTask<ReadOnlySequence<byte>> ReadUntilReceiveNewLineAsync()
     {
         while (true)
         {

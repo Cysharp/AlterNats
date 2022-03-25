@@ -19,8 +19,8 @@ public sealed record NatsOptions
 {
     const string DefaultHost = "localhost";
     const int DefaultPort = 4222;
-    const int DefaultWriterBufferSize = 32768;
-    const int DefaultReaderBufferSize = 1048576; // 1048576; // 1MB
+    const int DefaultWriterBufferSize = 65535;
+    const int DefaultReaderBufferSize = 1048576;
 
     // TODO:not null, default serializer
     public static NatsOptions Default = new NatsOptions(

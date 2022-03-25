@@ -2,13 +2,11 @@
 using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Buffers.Text;
-using System.Diagnostics;
-using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 
 namespace AlterNats;
 
@@ -16,10 +14,8 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 {
     readonly Socket socket;
     readonly NatsConnection connection;
-    readonly PipeWriter writer;
-    readonly PipeReader reader;
-    readonly Task receiveLoop;
-    readonly Task consumeLoop;
+    readonly SocketReader socketReader;
+    readonly Task readLoop;
     readonly CancellationTokenSource cancellationTokenSource;
     readonly ILogger<NatsReadProtocolProcessor> logger;
     readonly bool isEnabledTraceLogging;
@@ -31,76 +27,15 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
         this.cancellationTokenSource = new CancellationTokenSource();
         this.isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
-
-        // TODO: set threshold
-        var pipe = new Pipe(new PipeOptions(useSynchronizationContext: false, pauseWriterThreshold: 0));
-        this.reader = pipe.Reader;
-        this.writer = pipe.Writer;
-
-        this.receiveLoop = Task.Run(ReciveLoopAsync);
-        this.consumeLoop = Task.Run(ConsumeLoopAsync);
+        this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, cancellationTokenSource.Token);
+        this.readLoop = Task.Run(ReadLoopAsync);
     }
 
-    // receive data from socket and write to Pipe.
-    async Task ReciveLoopAsync()
+    async Task ReadLoopAsync()
     {
         try
         {
-            await connection.WaitForConnect.WaitAsync(cancellationTokenSource.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        var totalRead = 0;
-        while (true)
-        {
-            var buffer = writer.GetMemory(connection.Options.ReaderBufferSize);
-            try
-            {
-                if (isEnabledTraceLogging)
-                {
-                    logger.LogTrace("Start Socket Read");
-                }
-
-                var read = await socket.ReceiveAsync(buffer, SocketFlags.None, cancellationTokenSource.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break; // complete.
-                }
-
-                totalRead += read;
-
-                if (isEnabledTraceLogging)
-                {
-                    logger.LogTrace("Socket Receive Read: {0} B, Total: {1}", read, totalRead);
-                }
-                writer.Advance(read);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error occured during receive loop.");
-                return; // ???
-            }
-
-            var result = await writer.FlushAsync();
-
-            if (result.IsCompleted)
-            {
-                break;
-            }
-        }
-
-        await writer.CompleteAsync();
-    }
-
-    // read data from pipe and consume message.
-    async Task ConsumeLoopAsync()
-    {
-        try
-        {
-            await connection.WaitForConnect.WaitAsync(cancellationTokenSource.Token);
+            await connection.WaitForConnect.WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -111,9 +46,12 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             try
             {
-                var readResult = await reader.ReadAtLeastAsync(4).ConfigureAwait(false);
-                var buffer = readResult.Buffer;
+                // when read buffer is complete, ReadFully.
+                var buffer = await socketReader.ReadAtLeastAsync(4).ConfigureAwait(false);
 
+                // parse messages from buffer without additional socket read
+                // Note: in this loop, use socketReader.Read "must" requires socketReader.AdvanceTo
+                //       because buffer-sequence and reader's sequence state is not synced to optimize performance.
                 while (buffer.Length > 0)
                 {
                     var first = buffer.First;
@@ -127,9 +65,9 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                     {
                         if (buffer.Length < 4)
                         {
-                            reader.AdvanceTo(buffer.Start, buffer.End);
-                            readResult = await reader.ReadAtLeastAsync(4).ConfigureAwait(false);
-                            buffer = readResult.Buffer;
+                            // try get additional buffer to require read Code
+                            socketReader.AdvanceTo(buffer.Start);
+                            buffer = await socketReader.ReadAtLeastAsync(4 - (int)buffer.Length).ConfigureAwait(false);
                         }
                         code = GetCode(buffer);
                     }
@@ -149,8 +87,9 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         var positionBeforePayload = buffer.PositionOf((byte)'\n');
                         if (positionBeforePayload == null)
                         {
-                            reader.AdvanceTo(buffer.Start, buffer.End); // TODO:this advance ok???
-                            (buffer, positionBeforePayload) = await ReadUntilReceiveNewLineAsync().ConfigureAwait(false);
+                            socketReader.AdvanceTo(buffer.Start);
+                            buffer = await socketReader.ReadUntilReceiveNewLineAsync().ConfigureAwait(false);
+                            positionBeforePayload = buffer.PositionOf((byte)'\n')!;
                         }
 
                         var msgHeader = buffer.Slice(0, positionBeforePayload.Value);
@@ -161,10 +100,8 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
                         if (payloadSlice.Length < (payloadLength + 2)) // slice required \r\n
                         {
-                            // TODO: how handle result?
-                            reader.AdvanceTo(payloadBegin);
-                            var readResult2 = await reader.ReadAtLeastAsync(payloadLength + 2); // payload + \r\n
-                            buffer = readResult2.Buffer;
+                            socketReader.AdvanceTo(payloadBegin);
+                            buffer = await socketReader.ReadAtLeastAsync(payloadLength + 2); // payload + \r\n
                             payloadSlice = buffer.Slice(0, payloadLength);
                         }
                         else
@@ -182,16 +119,17 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                     }
                 }
 
-                reader.AdvanceTo(buffer.End);
-                if (readResult.IsCompleted)
-                {
-                    break;
-                }
+                // Length == 0, AdvanceTo End.
+                socketReader.AdvanceTo(buffer.End);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error occured during read loop.");
-                // TODO:return?
+                // TODO:return? should disconnect socket.
                 return;
             }
         }
@@ -233,24 +171,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     }
 
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    async ValueTask<(ReadOnlySequence<byte>, SequencePosition)> ReadUntilReceiveNewLineAsync()
-    {
-        // TODO:how read readResult handle?
-        while (true)
-        {
-            var result = await reader.ReadAsync();
-            var position = result.Buffer.PositionOf((byte)'\n');
-            if (position != null)
-            {
-                return (result.Buffer, position.Value);
-            }
-
-            reader.AdvanceTo(result.Buffer.Start, result.Buffer.End);
-            // TODO:check result completed?
-        }
-    }
-
-    [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     async ValueTask<ReadOnlySequence<byte>> DispatchCommandAsync(int code, in ReadOnlySequence<byte> buffer)
     {
         var length = (int)buffer.Length;
@@ -259,16 +179,18 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             const int PingSize = 6; // PING\r\n
 
-            logger.LogTrace("Receive Ping");
+            if (isEnabledTraceLogging)
+            {
+                logger.LogTrace("Receive Ping");
+            }
 
             connection.PostPong(); // return pong
 
             if (length < PingSize)
             {
-                // TODO:how read readResult handle?
-                reader.AdvanceTo(buffer.Start, buffer.End);
-                var readResult = await reader.ReadAtLeastAsync(PingSize - length);
-                return readResult.Buffer.Slice(PingSize);
+                socketReader.AdvanceTo(buffer.Start);
+                var readResult = await socketReader.ReadAtLeastAsync(PingSize - length).ConfigureAwait(false);
+                return readResult.Slice(PingSize);
             }
 
             return buffer.Slice(PingSize);
@@ -277,57 +199,68 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             const int PongSize = 6; // PONG\r\n
 
-            // TODO: PONG TRACE
-            logger.LogTrace("Receive Pong");
+            if (isEnabledTraceLogging)
+            {
+                logger.LogTrace("Receive Pong");
+            }
 
             if (length < PongSize)
             {
-                // TODO:how read readResult handle?
-                reader.AdvanceTo(buffer.Start, buffer.End);
-                var readResult = await reader.ReadAtLeastAsync(PongSize - length);
-                return readResult.Buffer.Slice(PongSize);
+                socketReader.AdvanceTo(buffer.Start);
+                var readResult = await socketReader.ReadAtLeastAsync(PongSize - length).ConfigureAwait(false);
+                return readResult.Slice(PongSize);
             }
 
             return buffer.Slice(PongSize);
         }
         else if (code == ServerOpCodes.Error)
         {
-            logger.LogTrace("Receive Error");
+            if (isEnabledTraceLogging)
+            {
+                logger.LogTrace("Receive Error");
+            }
 
             // TODO: Parse Error
             throw new NotImplementedException();
         }
         else if (code == ServerOpCodes.Ok)
         {
-            logger.LogTrace("Receive OK");
+            if (isEnabledTraceLogging)
+            {
+                logger.LogTrace("Receive OK");
+            }
 
             const int OkSize = 5; // +OK\r\n
 
             if (length < OkSize)
             {
-                // TODO:how read readResult handle?
-                reader.AdvanceTo(buffer.Start, buffer.End);
-                var readResult = await reader.ReadAtLeastAsync(OkSize - length);
-                return readResult.Buffer.Slice(OkSize);
+                socketReader.AdvanceTo(buffer.Start);
+                var readResult = await socketReader.ReadAtLeastAsync(OkSize - length).ConfigureAwait(false);
+                return readResult.Slice(OkSize);
             }
 
             return buffer.Slice(OkSize);
         }
         else if (code == ServerOpCodes.Info)
         {
-            logger.LogTrace("Receive Info");
+            if (isEnabledTraceLogging)
+            {
+                logger.LogTrace("Receive Info");
+            }
 
             // try to get \n.
             var position = buffer.PositionOf((byte)'\n');
 
             if (position == null)
             {
-                reader.AdvanceTo(buffer.Start, buffer.End);
-                var (newBuffer, newPosition) = await ReadUntilReceiveNewLineAsync();
+                socketReader.AdvanceTo(buffer.Start);
+                var newBuffer = await socketReader.ReadUntilReceiveNewLineAsync().ConfigureAwait(false);
+                var newPosition = newBuffer.PositionOf((byte)'\n');
+
                 var serverInfo = ParseInfo(newBuffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
-                return newBuffer.Slice(buffer.GetPosition(1, newPosition));
+                return newBuffer.Slice(buffer.GetPosition(1, newPosition!.Value));
             }
             else
             {
@@ -339,12 +272,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         }
         else
         {
-            // TODO:reaches invalid line.
-            //var s = Encoding.UTF8.GetString(buffer.Span.Slice(0, 4));
-            //Console.WriteLine("NANIDEMO NAI!?:" + s);
-
-            // reaches invalid line.
-            // Try to skip next '\n';
+            // TODO:reaches invalid line, log warn and try to get newline and go to nextloop.
             throw new NotImplementedException();
         }
     }
@@ -416,10 +344,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         cancellationTokenSource.Cancel();
-        await writer.CompleteAsync();
-        await reader.CompleteAsync(); // TODO:check stop behaviour
-        await receiveLoop;
-        await consumeLoop;
+        await readLoop;
     }
 
     internal static class ServerOpCodes
