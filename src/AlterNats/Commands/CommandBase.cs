@@ -12,8 +12,6 @@ internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
     TSelf? nextNode;
     public ref TSelf? NextNode => ref nextNode;
 
-    public abstract string WriteTraceMessage { get; }
-
     public virtual void Return()
     {
         pool.TryPush(Unsafe.As<TSelf>(this));

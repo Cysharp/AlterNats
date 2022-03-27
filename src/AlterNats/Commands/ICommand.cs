@@ -8,5 +8,4 @@ internal interface ICommand
 {
     void Return();
     void Write(ProtocolWriter writer);
-    string WriteTraceMessage { get; }
 }

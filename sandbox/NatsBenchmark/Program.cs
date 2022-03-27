@@ -5,9 +5,9 @@ using NatsBenchmark;
 using System.Diagnostics;
 using ZLogger;
 
+var isPortableThreadPool = await IsRunOnPortableThreadPoolAsync();
+Console.WriteLine($"RunOnPortableThreadPool:{isPortableThreadPool}");
 
-ThreadPool.SetMinThreads(1000, 1000);
-// ThreadPool.SetMaxThreads(10, 10);
 
 try
 {
@@ -21,6 +21,19 @@ catch (Exception e)
 }
 
 
+// COMPlus_ThreadPool_UsePortableThreadPool=0 -> false
+static Task<bool> IsRunOnPortableThreadPoolAsync()
+{
+    var tcs = new TaskCompletionSource<bool>();
+    ThreadPool.QueueUserWorkItem(_ =>
+    {
+        var st = new StackTrace().ToString();
+        tcs.TrySetResult(st.Contains("PortableThreadPool"));
+    });
+    return tcs.Task;
+}
+
+
 namespace NatsBenchmark
 {
     partial class Benchmark
@@ -31,7 +44,7 @@ namespace NatsBenchmark
                 .AddLogging(x =>
                 {
                     x.ClearProviders();
-                    x.SetMinimumLevel(LogLevel.Information);
+                    x.SetMinimumLevel(LogLevel.Trace);
                     x.AddZLoggerConsole();
                 })
                 .BuildServiceProvider();
@@ -42,6 +55,7 @@ namespace NatsBenchmark
             var options = NatsOptions.Default with
             {
                 LoggerFactory = loggerFactory,
+                UseThreadPoolCallback = false,
                 ConnectOptions = ConnectOptions.Default with { Echo = false, Verbose = false }
             };
 

@@ -27,7 +27,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
         this.cancellationTokenSource = new CancellationTokenSource();
         this.isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
-        this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, cancellationTokenSource.Token);
+        this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, connection.Options.LoggerFactory, cancellationTokenSource.Token);
         this.readLoop = Task.Run(ReadLoopAsync);
     }
 
@@ -77,7 +77,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                     {
                         if (isEnabledTraceLogging)
                         {
-                            logger.LogTrace("Receive Msg");
+                            // logger.LogTrace("Receive Msg");
                         }
 
                         // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg

@@ -1,6 +1,7 @@
 ﻿using AlterNats.Commands;
 using AlterNats.Internal;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
@@ -14,6 +15,7 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
     readonly Channel<ICommand> channel;
     readonly Task writeLoop;
     readonly NatsOptions options;
+    readonly Stopwatch stopwatch = new Stopwatch();
 
     public NatsPipeliningSocketWriter(Socket socket, NatsOptions options)
     {
@@ -52,11 +54,6 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
                 {
                     while (bufferWriter.WrittenCount < writerBufferSize && reader.TryRead(out var command))
                     {
-                        if (isEnabledTraceLogging)
-                        {
-                            logger.LogTrace(command.WriteTraceMessage);
-                        }
-
                         command.Write(protocolWriter);
 
                         if (command is IPromise p)
@@ -71,24 +68,21 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
 
                     try
                     {
-                        if (isEnabledTraceLogging)
-                        {
-                            logger.LogTrace("Write loop start Flush. WriteSize: {0}", bufferWriter.WrittenCount);
-                        }
-
                         // SendAsync(ReadOnlyMemory) is very efficient, internally using AwaitableAsyncSocketEventArgs
                         // should use cancellation token?, currently no, wait for flush complete.
+                        stopwatch.Restart();
                         await socket.SendAsync(bufferWriter.WrittenMemory, SocketFlags.None).ConfigureAwait(false);
+                        stopwatch.Stop();
+                        if (isEnabledTraceLogging)
+                        {
+                            logger.LogTrace("Socket.SendAsync. Size: {0} Elapsed: {1}ms", bufferWriter.WrittenCount, stopwatch.Elapsed.TotalMilliseconds);
+                        }
+
                         bufferWriter.Reset();
 
                         foreach (var item in promiseList)
                         {
                             item.SetResult();
-                        }
-
-                        if (isEnabledTraceLogging)
-                        {
-                            logger.LogTrace("Write loop complete Flush.");
                         }
                     }
                     catch (Exception ex)

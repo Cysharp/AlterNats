@@ -42,8 +42,6 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
         return result;
     }
 
-    public override string WriteTraceMessage => "Write PUB Command to buffer.";
-
     public override void Write(ProtocolWriter writer)
     {
         writer.WritePublish(subject!, null, value, serializer!);
@@ -87,8 +85,6 @@ internal sealed class PublishAsyncCommand<T> : CommandBase<PublishAsyncCommand<T
 
         return result;
     }
-
-    public override string WriteTraceMessage => "Write PUB Command to buffer.";
 
     public override void Write(ProtocolWriter writer)
     {
@@ -195,8 +191,6 @@ internal sealed class PublishRawCommand : CommandBase<PublishRawCommand>
 
         return result;
     }
-
-    public override string WriteTraceMessage => "Write PUB Command to buffer.";
 
     public override void Write(ProtocolWriter writer)
     {
