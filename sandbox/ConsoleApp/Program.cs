@@ -26,16 +26,14 @@ await connection.ConnectAsync();
 
 var key = new NatsKey("foobar");
 
-connection.Subscribe<string>(key, x =>
+await connection.SubscribeAsync<byte[]>(key.Key, x =>
 {
-    global::System.Console.WriteLine("received:" + x);
+    global::System.Console.WriteLine("received:" + Encoding.UTF8.GetString(x));
 });
 
-for (int i = 0; i < 100; i++)
-{
-    await connection.PublishAsync(key, "foobar").ConfigureAwait(false); // cache???
-}
 
+
+connection.Publish("foobar", "foooon", Encoding.UTF8.GetBytes("tako"));
 
 
 Console.ReadLine();

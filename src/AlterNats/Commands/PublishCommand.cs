@@ -111,39 +111,41 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
 
 
 // TODO:Async Impl
-internal sealed class PublishRawCommand : CommandBase<PublishRawCommand>
+internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 {
-    NatsKey? subject;
+    string? stringSubject;
+    string? stringReplyTo;
+    NatsKey? encodedSubject;
+    NatsKey? encodedReplyTo;
     ReadOnlyMemory<byte> value;
 
-    PublishRawCommand()
+    PublishBytesCommand()
     {
     }
 
-    // TODO:reply-to
-    // TODO:ReadOnlyMemory<byte> overload
-
-    public static PublishRawCommand Create(string subject, byte[] value)
+    public static PublishBytesCommand Create(string subject, string? replyTo, ReadOnlyMemory<byte> value)
     {
         if (!pool.TryPop(out var result))
         {
-            result = new PublishRawCommand();
+            result = new PublishBytesCommand();
         }
 
-        result.subject = new NatsKey(subject); // TODO:use specified overload.
+        result.stringSubject = subject;
+        result.stringReplyTo = replyTo;
         result.value = value;
 
         return result;
     }
 
-    public static PublishRawCommand Create(NatsKey subject, byte[] value, INatsSerializer serializer)
+    public static PublishBytesCommand Create(NatsKey subject, NatsKey? replyTo, byte[] value, INatsSerializer serializer)
     {
         if (!pool.TryPop(out var result))
         {
-            result = new PublishRawCommand();
+            result = new PublishBytesCommand();
         }
 
-        result.subject = subject;
+        result.encodedSubject = subject;
+        result.encodedReplyTo = replyTo;
         result.value = value;
 
         return result;
@@ -151,12 +153,22 @@ internal sealed class PublishRawCommand : CommandBase<PublishRawCommand>
 
     public override void Write(ProtocolWriter writer)
     {
-        writer.WritePublish(subject!, null, value.Span);
+        if (stringSubject != null)
+        {
+            writer.WritePublish(stringSubject, stringReplyTo, value.Span);
+        }
+        else
+        {
+            writer.WritePublish(encodedSubject!, encodedReplyTo, value.Span);
+        }
     }
 
     public override void Reset()
     {
-        subject = null;
+        stringSubject = null;
+        stringReplyTo = null;
+        encodedSubject = null;
+        encodedReplyTo = null;
         value = default;
     }
 }

@@ -117,7 +117,13 @@ public class NatsConnection : IAsyncDisposable
 
     public void Publish(string key, byte[] value)
     {
-        var command = PublishRawCommand.Create(key, value);
+        var command = PublishBytesCommand.Create(key, null, value);
+        socketWriter.Post(command);
+    }
+
+    public void Publish(string key, string replyTo, byte[] value)
+    {
+        var command = PublishBytesCommand.Create(key, replyTo, value);
         socketWriter.Post(command);
     }
 
