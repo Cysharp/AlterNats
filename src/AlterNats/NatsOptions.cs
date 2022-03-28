@@ -14,24 +14,19 @@ public sealed record NatsOptions
     ILoggerFactory LoggerFactory,
     int WriterBufferSize,
     int ReaderBufferSize,
-    bool UseThreadPoolCallback
+    bool UseThreadPoolCallback,
+    string InboxPrefix
 )
 {
-    const string DefaultHost = "localhost";
-    const int DefaultPort = 4222;
-    const int DefaultWriterBufferSize = 65535;
-    const int DefaultReaderBufferSize = 1048576;
-
-    // TODO:not null, default serializer
     public static NatsOptions Default = new NatsOptions(
-        Host: DefaultHost,
-        Port: DefaultPort,
+        Host: "localhost",
+        Port: 4222,
         ConnectOptions: ConnectOptions.Default,
         Serializer: new JsonNatsSerializer(new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),
         LoggerFactory: NullLoggerFactory.Instance,
-        WriterBufferSize: DefaultWriterBufferSize,
-        ReaderBufferSize: DefaultReaderBufferSize,
-        UseThreadPoolCallback: false);
+        WriterBufferSize: 32767,
+        ReaderBufferSize: 1048576,
+        UseThreadPoolCallback: false,
+        InboxPrefix: "_INBOX.");
 
 }
-

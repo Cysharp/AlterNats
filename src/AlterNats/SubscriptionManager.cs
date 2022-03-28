@@ -19,6 +19,7 @@ internal sealed class SubscriptionManager : IDisposable
         this.connection = connection;
     }
 
+    // TODO:remove this?(difficult to handle fire-and-forget)
     public IDisposable Add<T>(string key, Action<T> handler)
     {
         lock (gate)

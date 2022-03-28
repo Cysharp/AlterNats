@@ -48,7 +48,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSel
         return new ValueTask(this, core.Version);
     }
 
-    public void SetResult()
+    public virtual void SetResult()
     {
         ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
     }

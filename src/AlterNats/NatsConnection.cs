@@ -127,6 +127,26 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(command);
     }
 
+
+    // TODO:  this API?
+
+
+    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(string key, TRequest request)
+    {
+        
+
+        throw new NotImplementedException();
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> responseHandler)
+    {
+        // _INBOX.
+        var replyTo = $"{Options.InboxPrefix}{Guid.NewGuid().ToString()}.";
+
+        throw new NotImplementedException();
+    }
+
+
     // TODO: Remove fire-and-forget subscribe?
 
     public IDisposable Subscribe<T>(string key, Action<T> handler)
@@ -143,6 +163,8 @@ public class NatsConnection : IAsyncDisposable
     {
         return subscriptionManager.AddAsync(key, handler);
     }
+
+    // ResponseAsync
 
     // internal commands.
 

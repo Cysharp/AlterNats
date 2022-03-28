@@ -321,14 +321,15 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         }
         else
         {
-            // TODO:impl this
-            var replyTo = msgHeader;
+            var replyTo = replyToOrBytes;
             var bytesSlice = msgHeader;
 
+            var subscriptionId = GetInt32(sid);
+            var payloadLength = GetInt32(bytesSlice);
 
-            // TODO:
-
-            throw new NotImplementedException();
+            // TODO:replayto box.
+            var replyToString = Encoding.UTF8.GetString(replyTo);
+            return (subscriptionId, payloadLength);
         }
     }
 

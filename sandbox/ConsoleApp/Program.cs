@@ -33,10 +33,29 @@ await connection.SubscribeAsync<byte[]>(key.Key, x =>
 
 
 
+
+
+
+
+await connection.SubscribeRequestAsync<string, int>("key", (req) =>
+{
+
+
+    return 1000;
+});
+
+var value = await connection.RequestAsync<string, int>("key", "foobarbaz");
+
+
+
+
+
 connection.Publish("foobar", "foooon", Encoding.UTF8.GetBytes("tako"));
 
 
 Console.ReadLine();
+
+
 
 
 
