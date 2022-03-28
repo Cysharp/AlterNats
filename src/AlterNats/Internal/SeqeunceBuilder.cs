@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -21,7 +21,7 @@ internal sealed class SeqeunceBuilder
     // Memory is only allowed rent from ArrayPool.
     public void Append(ReadOnlyMemory<byte> buffer)
     {
-        if (length == 0)
+        if (length == 0 && first == null)
         {
             var first = SequenceSegment.Create(buffer);
             this.first = first;

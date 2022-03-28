@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\AlterNats.MessagePack\AlterNats.MessagePack.csproj" />
     <ProjectReference Include="..\..\src\AlterNats\AlterNats.csproj" />
   </ItemGroup>
 

@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace AlterNats.Internal;
 
 // similar as ArrayBufferWriter but adds more functional for ProtocolWriter
-internal sealed class FixedArrayBufferWriter : IBufferWriter<byte>
+internal sealed class FixedArrayBufferWriter : ICountableBufferWriter
 {
     byte[] buffer;
     int written;

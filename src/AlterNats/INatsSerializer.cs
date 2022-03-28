@@ -5,8 +5,13 @@ namespace AlterNats;
 
 public interface INatsSerializer
 {
-    int Serialize<T>(IBufferWriter<byte> bufferWriter, T? value);
+    int Serialize<T>(ICountableBufferWriter bufferWriter, T? value);
     T? Deserialize<T>(in ReadOnlySequence<byte> buffer);
+}
+
+public interface ICountableBufferWriter : IBufferWriter<byte>
+{
+    int WrittenCount { get; }
 }
 
 public sealed class JsonNatsSerializer : INatsSerializer
@@ -27,7 +32,7 @@ public sealed class JsonNatsSerializer : INatsSerializer
         this.options = options;
     }
 
-    public int Serialize<T>(IBufferWriter<byte> bufferWriter, T? value)
+    public int Serialize<T>(ICountableBufferWriter bufferWriter, T? value)
     {
         Utf8JsonWriter writer;
         if (jsonWriter == null)

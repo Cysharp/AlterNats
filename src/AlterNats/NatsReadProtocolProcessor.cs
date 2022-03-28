@@ -98,7 +98,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                             if (payloadSlice.Length < 2)
                             {
                                 socketReader.AdvanceTo(payloadBegin);
-                                buffer = await socketReader.ReadAtLeastAsync(2); // \r\n
+                                buffer = await socketReader.ReadAtLeastAsync(2).ConfigureAwait(false); // \r\n
                                 buffer = buffer.Slice(2);
                             }
                             else
@@ -117,7 +117,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                             if (payloadSlice.Length < (payloadLength + 2)) // slice required \r\n
                             {
                                 socketReader.AdvanceTo(payloadBegin);
-                                buffer = await socketReader.ReadAtLeastAsync(payloadLength + 2); // payload + \r\n
+                                buffer = await socketReader.ReadAtLeastAsync(payloadLength + 2).ConfigureAwait(false); // payload + \r\n
                                 payloadSlice = buffer.Slice(0, payloadLength);
                             }
                             else
