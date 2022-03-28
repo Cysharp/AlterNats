@@ -47,6 +47,7 @@ internal sealed class ProtocolWriter
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#pub
     // PUB <subject> [reply-to] <#bytes>\r\n[payload]
+    // To omit the payload, set the payload size to 0, but the second CRLF is still required.
 
     public void WritePublish(NatsKey subject, NatsKey? replyTo, ReadOnlySpan<byte> payload)
     {
@@ -82,14 +83,11 @@ internal sealed class ProtocolWriter
         CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
         offset += CommandConstants.NewLine.Length;
 
-        if (payload.Length == 0)
+        if (payload.Length != 0)
         {
-            writer.Advance(offset);
-            return;
+            payload.CopyTo(writableSpan.Slice(offset));
+            offset += payload.Length;
         }
-
-        payload.CopyTo(writableSpan.Slice(offset));
-        offset += payload.Length;
 
         CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
         offset += CommandConstants.NewLine.Length;
@@ -135,14 +133,11 @@ internal sealed class ProtocolWriter
         CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
         offset += CommandConstants.NewLine.Length;
 
-        if (payload.Length == 0)
+        if (payload.Length != 0)
         {
-            writer.Advance(offset);
-            return;
+            payload.CopyTo(writableSpan.Slice(offset));
+            offset += payload.Length;
         }
-
-        payload.CopyTo(writableSpan.Slice(offset));
-        offset += payload.Length;
 
         CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
         offset += CommandConstants.NewLine.Length;

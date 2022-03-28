@@ -76,11 +76,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                     // Optimize for Msg parsing, Inline async code
                     if (code == ServerOpCodes.Msg)
                     {
-                        if (isEnabledTraceLogging)
-                        {
-                            // logger.LogTrace("Receive Msg");
-                        }
-
                         // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg
                         // MSG <subject> <sid> [reply-to] <#bytes>\r\n[payload]
 
@@ -99,7 +94,21 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         if (payloadLength == 0)
                         {
                             // payload is empty.
-                            buffer = buffer.Slice(buffer.GetPosition(1, positionBeforePayload.Value));
+                            var payloadBegin = buffer.GetPosition(1, positionBeforePayload.Value);
+                            var payloadSlice = buffer.Slice(payloadBegin);
+                            if (payloadSlice.Length < 2)
+                            {
+                                socketReader.AdvanceTo(payloadBegin);
+                                buffer = await socketReader.ReadAtLeastAsync(2); // \r\n
+                                buffer = buffer.Slice(2);
+                            }
+                            else
+                            {
+                                buffer = buffer.Slice(buffer.GetPosition(3, positionBeforePayload.Value));
+                            }
+
+                            // publish to registered handlers.
+                            connection.PublishToClientHandlers(subscriptionId, ReadOnlySequence<byte>.Empty);
                         }
                         else
                         {
@@ -117,9 +126,10 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                                 payloadSlice = payloadSlice.Slice(0, payloadLength); // TODO:reduce slice count?
                             }
 
-                            connection.PublishToClientHandlers(subscriptionId, payloadSlice);
-
                             buffer = buffer.Slice(buffer.GetPosition(2, payloadSlice.End)); // payload + \r\n
+
+                            // publish to registered handlers.
+                            connection.PublishToClientHandlers(subscriptionId, payloadSlice);
                         }
                     }
                     else
@@ -188,11 +198,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             const int PingSize = 6; // PING\r\n
 
-            if (isEnabledTraceLogging)
-            {
-                logger.LogTrace("Receive Ping");
-            }
-
             connection.PostPong(); // return pong
 
             if (length < PingSize)
@@ -208,11 +213,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             const int PongSize = 6; // PONG\r\n
 
-            if (isEnabledTraceLogging)
-            {
-                logger.LogTrace("Receive Pong");
-            }
-
             if (length < PongSize)
             {
                 socketReader.AdvanceTo(buffer.Start);
@@ -224,11 +224,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         }
         else if (code == ServerOpCodes.Error)
         {
-            if (isEnabledTraceLogging)
-            {
-                logger.LogTrace("Receive Error");
-            }
-
             // try to get \n.
             var position = buffer.PositionOf((byte)'\n');
             if (position == null)
@@ -249,11 +244,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         }
         else if (code == ServerOpCodes.Ok)
         {
-            if (isEnabledTraceLogging)
-            {
-                logger.LogTrace("Receive OK");
-            }
-
             const int OkSize = 5; // +OK\r\n
 
             if (length < OkSize)
@@ -267,11 +257,6 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         }
         else if (code == ServerOpCodes.Info)
         {
-            if (isEnabledTraceLogging)
-            {
-                logger.LogTrace("Receive Info");
-            }
-
             // try to get \n.
             var position = buffer.PositionOf((byte)'\n');
 

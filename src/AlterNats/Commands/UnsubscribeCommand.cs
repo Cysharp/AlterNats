@@ -25,9 +25,8 @@ internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
         writer.WriteUnsubscribe(subscriptionId, null);
     }
 
-    public override void Return()
+    public override void Reset()
     {
         subscriptionId = 0;
-        base.Return();
     }
 }

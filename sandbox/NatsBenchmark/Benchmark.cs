@@ -155,10 +155,6 @@ namespace NatsBenchmark
 
             if (size == 0)
                 return null;
-            if (size == 8)
-            {
-                return Encoding.ASCII.GetBytes("abcdeghi");
-            }
 
             data = new byte[size];
             for (int i = 0; i < size; i++)
@@ -206,6 +202,8 @@ namespace NatsBenchmark
             ConnectionFactory cf = new ConnectionFactory();
 
             Options o = ConnectionFactory.GetDefaultOptions();
+            o.ClosedEventHandler = (_, __) => { };
+            o.DisconnectedEventHandler = (_, __) => { };
 
             o.Url = url;
             o.SubChannelLength = 10000000;

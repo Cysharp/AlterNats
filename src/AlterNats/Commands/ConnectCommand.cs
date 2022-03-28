@@ -1,18 +1,18 @@
 ﻿namespace AlterNats.Commands;
 
-internal sealed class ConnectCommand : CommandBase<ConnectCommand>
+internal sealed class AsyncConnectCommand : AsyncCommandBase<AsyncConnectCommand>
 {
     ConnectOptions? connectOptions;
 
-    ConnectCommand()
+    AsyncConnectCommand()
     {
     }
 
-    public static ConnectCommand Create(ConnectOptions connectOptions)
+    public static AsyncConnectCommand Create(ConnectOptions connectOptions)
     {
         if (!pool.TryPop(out var result))
         {
-            result = new ConnectCommand();
+            result = new AsyncConnectCommand();
         }
 
         result.connectOptions = connectOptions;
@@ -20,12 +20,10 @@ internal sealed class ConnectCommand : CommandBase<ConnectCommand>
         return result;
     }
 
-    public override void Return()
+    public override void Reset()
     {
         connectOptions = null;
-        base.Return();
     }
-
 
     public override void Write(ProtocolWriter writer)
     {

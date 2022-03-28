@@ -19,4 +19,8 @@ internal sealed class PongCommand : CommandBase<PongCommand>
     {
         writer.WritePong();
     }
+
+    public override void Reset()
+    {
+    }
 }

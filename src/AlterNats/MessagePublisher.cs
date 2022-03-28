@@ -103,7 +103,14 @@ internal sealed class ByteArrayMessagePublisher
         byte[] value;
         try
         {
-            value = buffer.ToArray();
+            if (buffer.IsEmpty)
+            {
+                value = Array.Empty<byte>();
+            }
+            else
+            {
+                value = buffer.ToArray();
+            }
         }
         catch (Exception ex)
         {
@@ -164,7 +171,14 @@ internal sealed class ReadOnlyMemoryMessagePublisher
         ReadOnlyMemory<byte> value;
         try
         {
-            value = buffer.ToArray();
+            if (buffer.IsEmpty)
+            {
+                value = Array.Empty<byte>();
+            }
+            else
+            {
+                value = buffer.ToArray();
+            }
         }
         catch (Exception ex)
         {

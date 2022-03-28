@@ -2,8 +2,6 @@
 
 internal sealed class DirectWriteCommand : ICommand
 {
-    public string WriteTraceMessage => "Write DIRECT Command to buffer for Debugging.";
-
     readonly string protocol;
 
     public DirectWriteCommand(string protocol)

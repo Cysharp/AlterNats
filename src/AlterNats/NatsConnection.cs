@@ -20,9 +20,6 @@ public class NatsConnection : IAsyncDisposable
 
     TaskCompletionSource waitForConnectSource; // when reconnect, make new source.
 
-    // use List for Queue is not performant
-    readonly List<PingCommand> pingQueue = new List<PingCommand>();
-
     public NatsOptions Options { get; }
     public NatsConnectionState ConnectionState { get; private set; }
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
@@ -71,21 +68,23 @@ public class NatsConnection : IAsyncDisposable
         }
         this.ConnectionState = NatsConnectionState.Open;
 
-        var command = ConnectCommand.Create(Options.ConnectOptions);
+        var command = AsyncConnectCommand.Create(Options.ConnectOptions);
         socketWriter.Post(command);
+        await command.AsValueTask();
 
         waitForConnectSource.TrySetResult(); // signal connected to NatsReadProtocolProcessor loop
         // TODO:wait get INFO?
     }
 
-    public void Ping()
+
+    public void PostPing()
     {
-        socketWriter.Post(LightPingCommand.Create());
+        socketWriter.Post(PingCommand.Create());
     }
 
     public ValueTask PingAsync()
     {
-        var command = PingCommand.Create(pingQueue);
+        var command = AsyncPingCommand.Create();
         socketWriter.Post(command);
         return command.AsValueTask();
     }
@@ -106,18 +105,23 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishAsync<T>(NatsKey key, T value)
     {
-        var command = PublishAsyncCommand<T>.Create(key, value, Options.Serializer);
+        var command = AsyncPublishCommand<T>.Create(key, value, Options.Serializer);
         socketWriter.Post(command);
         return command.AsValueTask();
     }
 
     // byte[] and ReadOnlyMemory<byte> uses raw publish.
     // TODO:ReadOnlyMemory<byte> overload.
+
+    // TODO:NULL Publish
+
     public void Publish(string key, byte[] value)
     {
         var command = PublishRawCommand.Create(key, value);
         socketWriter.Post(command);
     }
+
+    // TODO: Remove fire-and-forget subscribe?
 
     public IDisposable Subscribe<T>(string key, Action<T> handler)
     {
@@ -127,6 +131,11 @@ public class NatsConnection : IAsyncDisposable
     public IDisposable Subscribe<T>(NatsKey key, Action<T> handler)
     {
         return subscriptionManager.Add(key.Key, handler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key, handler);
     }
 
     // internal commands.
@@ -141,6 +150,13 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(SubscribeCommand.Create(subscriptionId, subject));
     }
 
+    internal ValueTask SubscribeAsync(int subscriptionId, string subject)
+    {
+        var command = AsyncSubscribeCommand.Create(subscriptionId, subject);
+        socketWriter.Post(command);
+        return command.AsValueTask();
+    }
+
     internal void PostUnsubscribe(int subscriptionId)
     {
         socketWriter.Post(UnsubscribeCommand.Create(subscriptionId));
@@ -151,22 +167,7 @@ public class NatsConnection : IAsyncDisposable
         subscriptionManager.PublishToClientHandlers(subscriptionId, buffer);
     }
 
-    // when receives PONG, signal PING Promise.
-    internal void SignalPingCommand()
-    {
-        lock (pingQueue)
-        {
-            if (pingQueue.Count != 0)
-            {
-                // TODO:????
-                var p = pingQueue[0];
-                pingQueue.RemoveAt(0);
-            }
-        }
-    }
-
-    // TODO: to internal
-    public void DirectWrite(string protocol)
+    internal void PostDirectWrite(string protocol)
     {
         socketWriter.Post(new DirectWriteCommand(protocol));
     }

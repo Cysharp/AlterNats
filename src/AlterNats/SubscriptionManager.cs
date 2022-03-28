@@ -48,6 +48,49 @@ internal sealed class SubscriptionManager : IDisposable
         }
     }
 
+    public async ValueTask<IDisposable> AddAsync<T>(string key, Action<T> handler)
+    {
+        int sid;
+        RefCountSubscription? subscription;
+        int handlerId;
+
+        lock (gate)
+        {
+            if (byStringKey.TryGetValue(key, out subscription))
+            {
+                if (subscription.ElementType != typeof(T))
+                {
+                    throw new InvalidOperationException($"Register different type on same key. RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
+                }
+
+                handlerId = subscription.AddHandler(handler);
+                return new Subscription(subscription, handlerId);
+            }
+            else
+            {
+                sid = Interlocked.Increment(ref subscriptionId);
+
+                subscription = new RefCountSubscription(this, sid, key, typeof(T));
+                handlerId = subscription.AddHandler(handler);
+                bySubscriptionId[sid] = subscription;
+                byStringKey[key] = subscription;
+            }
+        }
+
+        var returnSubscription = new Subscription(subscription, handlerId);
+        try
+        {
+            await connection.SubscribeAsync(sid, key).ConfigureAwait(false);
+        }
+        catch
+        {
+            returnSubscription.Dispose(); // can't subscribed, remove from holder.
+            throw;
+        }
+
+        return returnSubscription;
+    }
+
     internal void Remove(string key, int subscriptionId)
     {
         // inside lock from RefCountSubscription.RemoveHandler
@@ -91,7 +134,7 @@ internal sealed class SubscriptionManager : IDisposable
             this.handlerId = handlerId;
         }
 
-        void IDisposable.Dispose()
+        public void Dispose()
         {
             if (!isDisposed)
             {
