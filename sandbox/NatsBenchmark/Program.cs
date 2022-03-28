@@ -193,8 +193,8 @@ namespace NatsBenchmark
             //runPubSub("PubSub8k", 100000, 1024 * 8);
 
             // TODO:Support No publish
-            // RunPubSubAlterNats("PubSubNo", 10000000, 0);
-            RunPubSubAlterNats("AlterNats", 10000000, 8);
+            RunPubSubAlterNats("PubSubNo", 10000000, 0);
+            // RunPubSubAlterNats("AlterNats", 10000000, 8);
             //RunPubSubAlterNats("AlterNats100", 10000000, 100);
             //RunPubSubAlterNats("PubSub8b", 10000000, 8);
             //RunPubSubAlterNats("PubSub32b", 10000000, 32);

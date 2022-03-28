@@ -35,8 +35,6 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
         return result;
     }
 
-    public override string WriteTraceMessage => "Write SUB Command to buffer.";
-
     public override void Write(ProtocolWriter writer)
     {
         writer.WriteSubscribe(subscriptionId, subject!);

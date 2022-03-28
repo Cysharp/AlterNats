@@ -8,8 +8,6 @@ internal sealed class ConnectCommand : CommandBase<ConnectCommand>
     {
     }
 
-    public override string WriteTraceMessage => "Write CONNECT Command to buffer.";
-
     public static ConnectCommand Create(ConnectOptions connectOptions)
     {
         if (!pool.TryPop(out var result))

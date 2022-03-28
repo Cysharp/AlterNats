@@ -5,6 +5,7 @@ using System.Buffers.Text;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 
@@ -95,23 +96,31 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         var msgHeader = buffer.Slice(0, positionBeforePayload.Value);
                         var (subscriptionId, payloadLength) = ParseMessageHeader(msgHeader);
 
-                        var payloadBegin = buffer.GetPosition(1, positionBeforePayload.Value);
-                        var payloadSlice = buffer.Slice(payloadBegin);
-
-                        if (payloadSlice.Length < (payloadLength + 2)) // slice required \r\n
+                        if (payloadLength == 0)
                         {
-                            socketReader.AdvanceTo(payloadBegin);
-                            buffer = await socketReader.ReadAtLeastAsync(payloadLength + 2); // payload + \r\n
-                            payloadSlice = buffer.Slice(0, payloadLength);
+                            // payload is empty.
+                            buffer = buffer.Slice(buffer.GetPosition(1, positionBeforePayload.Value));
                         }
                         else
                         {
-                            payloadSlice = payloadSlice.Slice(0, payloadLength); // TODO:reduce slice count?
+                            var payloadBegin = buffer.GetPosition(1, positionBeforePayload.Value);
+                            var payloadSlice = buffer.Slice(payloadBegin);
+
+                            if (payloadSlice.Length < (payloadLength + 2)) // slice required \r\n
+                            {
+                                socketReader.AdvanceTo(payloadBegin);
+                                buffer = await socketReader.ReadAtLeastAsync(payloadLength + 2); // payload + \r\n
+                                payloadSlice = buffer.Slice(0, payloadLength);
+                            }
+                            else
+                            {
+                                payloadSlice = payloadSlice.Slice(0, payloadLength); // TODO:reduce slice count?
+                            }
+
+                            connection.PublishToClientHandlers(subscriptionId, payloadSlice);
+
+                            buffer = buffer.Slice(buffer.GetPosition(2, payloadSlice.End)); // payload + \r\n
                         }
-
-                        connection.PublishToClientHandlers(subscriptionId, payloadSlice);
-
-                        buffer = buffer.Slice(buffer.GetPosition(2, payloadSlice.End)); // payload + \r\n
                     }
                     else
                     {
@@ -220,8 +229,23 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 logger.LogTrace("Receive Error");
             }
 
-            // TODO: Parse Error
-            throw new NotImplementedException();
+            // try to get \n.
+            var position = buffer.PositionOf((byte)'\n');
+            if (position == null)
+            {
+                socketReader.AdvanceTo(buffer.Start);
+                var newBuffer = await socketReader.ReadUntilReceiveNewLineAsync().ConfigureAwait(false);
+                var newPosition = newBuffer.PositionOf((byte)'\n');
+                var error = ParseError(newBuffer.Slice(0, buffer.GetOffset(newPosition!.Value) - 1));
+                logger.LogError(error);
+                return newBuffer.Slice(newBuffer.GetPosition(1, newPosition!.Value));
+            }
+            else
+            {
+                var error = ParseError(buffer.Slice(0, buffer.GetOffset(position.Value) - 1));
+                logger.LogError(error);
+                return buffer.Slice(buffer.GetPosition(1, position.Value));
+            }
         }
         else if (code == ServerOpCodes.Ok)
         {
@@ -260,7 +284,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var serverInfo = ParseInfo(newBuffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
-                return newBuffer.Slice(buffer.GetPosition(1, newPosition!.Value));
+                return newBuffer.Slice(newBuffer.GetPosition(1, newPosition!.Value));
             }
             else
             {
@@ -279,7 +303,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#info
     // INFO {["option_name":option_value],...}
-    internal static ServerInfo ParseInfo(in ReadOnlySequence<byte> buffer)
+    static ServerInfo ParseInfo(in ReadOnlySequence<byte> buffer)
     {
         // skip `INFO`
         var jsonReader = new Utf8JsonReader(buffer.Slice(5));
@@ -287,6 +311,14 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         var serverInfo = JsonSerializer.Deserialize<ServerInfo>(ref jsonReader);
         if (serverInfo == null) throw new InvalidOperationException(""); // TODO:NatsException
         return serverInfo;
+    }
+
+    // https://docs.nats.io/reference/reference-protocols/nats-protocol#+ok-err
+    // -ERR <error message>
+    static string ParseError(in ReadOnlySequence<byte> errorSlice)
+    {
+        // SKip `-ERR `
+        return Encoding.UTF8.GetString(errorSlice.Slice(5));
     }
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg

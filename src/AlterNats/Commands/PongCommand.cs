@@ -15,8 +15,6 @@ internal sealed class PongCommand : CommandBase<PongCommand>
         return result;
     }
 
-    public override string WriteTraceMessage => "Write PONG Command to buffer.";
-
     public override void Write(ProtocolWriter writer)
     {
         writer.WritePong();

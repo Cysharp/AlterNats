@@ -20,8 +20,6 @@ internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
         return result;
     }
 
-    public override string WriteTraceMessage => "Write UNSUB Command to buffer.";
-
     public override void Write(ProtocolWriter writer)
     {
         writer.WriteUnsubscribe(subscriptionId, null);

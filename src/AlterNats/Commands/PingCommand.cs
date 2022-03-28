@@ -29,8 +29,6 @@ internal sealed class PingCommand : CommandBase<PingCommand>, IValueTaskSource, 
         return result;
     }
 
-    public override string WriteTraceMessage => "Write PING Command to buffer.";
-
     public override void Write(ProtocolWriter writer)
     {
         if (queue != null)
@@ -130,8 +128,6 @@ internal sealed class LightPingCommand : CommandBase<LightPingCommand>
         }
         return result;
     }
-
-    public override string WriteTraceMessage => "Write PING Command to buffer.";
 
     public override void Write(ProtocolWriter writer)
     {
