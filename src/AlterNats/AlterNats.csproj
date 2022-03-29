@@ -15,7 +15,6 @@
     <ItemGroup>
         <InternalsVisibleTo Include="$(AssemblyName).Tests" />
         <!-- TODO:Remove this... -->
-        <InternalsVisibleTo Include="ConsoleApp" />
         <InternalsVisibleTo Include="NatsBenchmark" />
     </ItemGroup>
 </Project>

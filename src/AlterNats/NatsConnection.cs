@@ -1,4 +1,5 @@
 ﻿using AlterNats.Commands;
+using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Net.Sockets;
 using System.Text;
@@ -19,14 +20,15 @@ public class NatsConnection : IAsyncDisposable
     readonly NatsPipeliningSocketWriter socketWriter;
     readonly SubscriptionManager subscriptionManager;
     readonly RequestResponseManager requestResponseManager;
+    readonly ILogger<NatsConnection> logger;
 
     TaskCompletionSource waitForConnectSource; // when reconnect, make new source.
+    internal ReadOnlyMemory<byte> indBoxPrefix;
 
     public NatsOptions Options { get; }
     public NatsConnectionState ConnectionState { get; private set; }
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
     internal Task WaitForConnect => waitForConnectSource.Task;
-    internal ReadOnlyMemory<byte> indBoxPrefix;
 
     public NatsConnection()
         : this(NatsOptions.Default)
@@ -39,6 +41,7 @@ public class NatsConnection : IAsyncDisposable
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForConnectSource = new TaskCompletionSource();
         this.indBoxPrefix = Encoding.ASCII.GetBytes($"{options.InboxPrefix}{Guid.NewGuid()}.");
+        this.logger = options.LoggerFactory.CreateLogger<NatsConnection>();
 
         this.socket = new Socket(Socket.OSSupportsIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         if (Socket.OSSupportsIPv6)
@@ -81,6 +84,8 @@ public class NatsConnection : IAsyncDisposable
         // TODO:wait get INFO?
     }
 
+    // Public APIs
+    // ***Async or Post***Async(fire-and-forget)
 
     public void PostPing()
     {
@@ -94,19 +99,6 @@ public class NatsConnection : IAsyncDisposable
         return command.AsValueTask();
     }
 
-    // TODO:SubscribeAsync?
-
-    public void Publish<T>(string key, T value)
-    {
-        Publish(new NatsKey(key, true), value);
-    }
-
-    public void Publish<T>(in NatsKey key, T value)
-    {
-        var command = PublishCommand<T>.Create(key, value, Options.Serializer);
-        socketWriter.Post(command);
-    }
-
     public ValueTask PublishAsync<T>(in NatsKey key, T value)
     {
         var command = AsyncPublishCommand<T>.Create(key, value, Options.Serializer);
@@ -114,23 +106,67 @@ public class NatsConnection : IAsyncDisposable
         return command.AsValueTask();
     }
 
-    // byte[] and ReadOnlyMemory<byte> uses raw publish.
-    // TODO:ReadOnlyMemory<byte> overload.
-
-    // TODO:NULL Publish
-
-    public void Publish(string key, byte[] value)
+    public ValueTask PublishAsync<T>(string key, T value)
     {
-        Publish(new NatsKey(key, true), value);
+        return PublishAsync<T>(new NatsKey(key, true), value);
     }
 
-    public void Publish(NatsKey key, byte[] value)
+    public ValueTask PublishAsync(in NatsKey key, byte[] value)
+    {
+        var command = AsyncPublishBytesCommand.Create(key, value);
+        socketWriter.Post(command);
+        return command.AsValueTask();
+    }
+
+    public ValueTask PublishAsync(string key, byte[] value)
+    {
+        return PublishAsync(new NatsKey(key, true), value);
+    }
+
+    public ValueTask PublishAsync(in NatsKey key, ReadOnlyMemory<byte> value)
+    {
+        var command = AsyncPublishBytesCommand.Create(key, value);
+        socketWriter.Post(command);
+        return command.AsValueTask();
+    }
+
+    public ValueTask PublishAsync(string key, ReadOnlyMemory<byte> value)
+    {
+        return PublishAsync(new NatsKey(key, true), value);
+    }
+
+    public void PostPublish<T>(in NatsKey key, T value)
+    {
+        var command = PublishCommand<T>.Create(key, value, Options.Serializer);
+        socketWriter.Post(command);
+    }
+
+    public void PostPublish<T>(string key, T value)
+    {
+        PostPublish<T>(new NatsKey(key, true), value);
+    }
+
+    public void PostPublish(in NatsKey key, byte[] value)
     {
         var command = PublishBytesCommand.Create(key, value);
         socketWriter.Post(command);
     }
 
+    public void PostPublish(string key, byte[] value)
+    {
+        PostPublish(new NatsKey(key, true), value);
+    }
 
+    public void PostPublish(in NatsKey key, ReadOnlyMemory<byte> value)
+    {
+        var command = PublishBytesCommand.Create(key, value);
+        socketWriter.Post(command);
+    }
+
+    public void PostPublish(string key, ReadOnlyMemory<byte> value)
+    {
+        PostPublish(new NatsKey(key, true), value);
+    }
 
     public ValueTask PublishBatchAsync<T>(IEnumerable<(NatsKey, T?)> values)
     {
@@ -146,6 +182,105 @@ public class NatsConnection : IAsyncDisposable
         return command.AsValueTask();
     }
 
+    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
+    {
+        return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request)!; // NOTE:return nullable?
+    }
+
+    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(string key, TRequest request)
+    {
+        return RequestAsync<TRequest, TResponse>(new NatsKey(key, true), request);
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> requestHandler)
+    {
+        return subscriptionManager.AddRequestHandlerAsync(key.Key, requestHandler);
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> requestHandler)
+    {
+        return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, Task<TResponse>> requestHandler)
+    {
+        return subscriptionManager.AddRequestHandlerAsync(key.Key, requestHandler);
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, Task<TResponse>> requestHandler)
+    {
+        return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key.Key, null, handler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key, null, handler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler)
+    {
+        return SubscribeAsync(key.Key, asyncHandler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler)
+    {
+        return subscriptionManager.AddAsync<T>(key, null, async x =>
+        {
+            try
+            {
+                await asyncHandler(x).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error occured during subscribe message.");
+            }
+        });
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key.Key, queueGroup, handler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, string queueGroup, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler)
+    {
+        return subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
+        {
+            try
+            {
+                await asyncHandler(x).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error occured during subscribe message.");
+            }
+        });
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler)
+    {
+        return subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
+        {
+            try
+            {
+                await asyncHandler(x).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error occured during subscribe message.");
+            }
+        });
+    }
 
     public IObservable<T> AsObservable<T>(string key)
     {
@@ -156,37 +291,6 @@ public class NatsConnection : IAsyncDisposable
     {
         return new NatsObservable<T>(this, key);
     }
-
-
-    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
-    {
-        return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request)!; // NOTE:return nullable?
-    }
-
-    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> responseHandler)
-    {
-        return subscriptionManager.AddRequestHandlerAsync(key.Key, responseHandler);
-    }
-
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
-    {
-        return subscriptionManager.AddAsync(key, null, handler);
-    }
-
-
-
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
-    {
-        return subscriptionManager.AddAsync(key.Key, null, handler);
-    }
-
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
-    {
-        return subscriptionManager.AddAsync(key.Key, queueGroup, handler);
-    }
-
-    // ResponseAsync
-
 
     // internal commands.
 
@@ -245,7 +349,6 @@ public class NatsConnection : IAsyncDisposable
     // static Cache operations.
 
     public static int MaxCommandCacheSize { get; set; } = int.MaxValue;
-
 
     public static int GetPublishCommandCacheSize<T>(bool async)
     {

@@ -62,6 +62,7 @@ internal sealed class SubscriptionManager : IDisposable
         return returnSubscription;
     }
 
+    // TODO:async handler overload.
     public async ValueTask<IDisposable> AddRequestHandlerAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> handler)
     {
         int sid;

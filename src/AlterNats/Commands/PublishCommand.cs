@@ -148,8 +148,6 @@ internal sealed class AsyncPublishBatchCommand<T> : AsyncCommandBase<AsyncPublis
     }
 }
 
-
-// TODO:Async Impl
 internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 {
     NatsKey subject;
@@ -175,6 +173,40 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
     public override void Write(ProtocolWriter writer)
     {
         writer.WritePublish(subject, null, value.Span);
+    }
+
+    protected override void Reset()
+    {
+        subject = default;
+        value = default;
+    }
+}
+
+internal sealed class AsyncPublishBytesCommand : AsyncCommandBase<AsyncPublishBytesCommand>
+{
+    NatsKey subject;
+    ReadOnlyMemory<byte> value;
+
+    AsyncPublishBytesCommand()
+    {
+    }
+
+    public static AsyncPublishBytesCommand Create(in NatsKey subject, ReadOnlyMemory<byte> value)
+    {
+        if (!TryRent(out var result))
+        {
+            result = new AsyncPublishBytesCommand();
+        }
+
+        result.subject = subject;
+        result.value = value;
+
+        return result;
+    }
+
+    public override void Write(ProtocolWriter writer)
+    {
+        writer.WritePublish(subject!, null, value.Span);
     }
 
     protected override void Reset()

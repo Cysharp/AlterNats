@@ -72,7 +72,8 @@ public class Program
             ("foobar", 104),
         });
 
-
+        var bytes = new byte[] { 1, 20, 255 };
+        await connection1.PublishAsync("foo", bytes);
 
 
 
@@ -80,21 +81,21 @@ public class Program
 
     }
 
-    static void CalcCommandPushPop(NatsKey key, INatsSerializer serializer)
-    {
-        var p = PublishCommand<int>.Create(key, 10, serializer);
-        (p as ICommand).Return();
+    //static void CalcCommandPushPop(NatsKey key, INatsSerializer serializer)
+    //{
+    //    var p = PublishCommand<int>.Create(key, 10, serializer);
+    //    (p as ICommand).Return();
 
-        JetBrains.Profiler.Api.MemoryProfiler.ForceGc();
-        JetBrains.Profiler.Api.MemoryProfiler.CollectAllocations(true);
-        JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("Before");
-        for (int i = 0; i < 1000; i++)
-        {
-            p = PublishCommand<int>.Create(key, 10, serializer);
-            (p as ICommand).Return();
-        }
-        JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("After");
-    }
+    //    JetBrains.Profiler.Api.MemoryProfiler.ForceGc();
+    //    JetBrains.Profiler.Api.MemoryProfiler.CollectAllocations(true);
+    //    JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("Before");
+    //    for (int i = 0; i < 1000; i++)
+    //    {
+    //        p = PublishCommand<int>.Create(key, 10, serializer);
+    //        (p as ICommand).Return();
+    //    }
+    //    JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("After");
+    //}
 
 
     //static void CalcSubscribe(NatsKey key, NatsConnection connection)

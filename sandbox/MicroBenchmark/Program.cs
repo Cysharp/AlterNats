@@ -103,7 +103,7 @@ public class DefaultRun
 
         for (int i = 0; i < count; i++)
         {
-            connection.Publish(key, new MyVector3());
+            connection.PostPublish(key, new MyVector3());
         }
 
         lock (gate)

@@ -104,7 +104,7 @@ namespace NatsBenchmark
 
             for (int i = 0; i < testCount; i++)
             {
-                pubConn.Publish(key, payload);
+                pubConn.PostPublish(key, payload);
             }
 
             lock (pubSubLock)
@@ -193,7 +193,7 @@ namespace NatsBenchmark
 
             for (int i = 0; i < testCount; i++)
             {
-                pubConn.Publish(key, new Vector3());
+                pubConn.PostPublish(key, new Vector3());
             }
 
             lock (pubSubLock)

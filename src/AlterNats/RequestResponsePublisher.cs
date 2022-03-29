@@ -115,7 +115,7 @@ internal sealed class RequestPublisher<TRequest, TResponse>
         {
             // TODO:UseThreadPoolCallback?
             var response = ((Func<TRequest, TResponse>)callback)(value!);
-            connection.Publish(replyTo, response); // send response.
+            connection.PostPublish(replyTo, response); // send response.
         }
         catch (Exception ex)
         {
