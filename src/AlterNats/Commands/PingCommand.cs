@@ -8,7 +8,7 @@ internal sealed class PingCommand : CommandBase<PingCommand>
 
     public static PingCommand Create()
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new PingCommand();
         }
@@ -33,7 +33,7 @@ internal sealed class AsyncPingCommand : AsyncCommandBase<AsyncPingCommand>
 
     public static AsyncPingCommand Create()
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new AsyncPingCommand();
         }

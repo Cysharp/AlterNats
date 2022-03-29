@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -95,16 +96,13 @@ internal sealed class SeqeunceBuilder
     }
 }
 
-internal class SequenceSegment : ReadOnlySequenceSegment<byte>, IObjectPoolNode<SequenceSegment>
+internal class SequenceSegment : ReadOnlySequenceSegment<byte>
 {
-    static ObjectPool<SequenceSegment> pool;
-
-    SequenceSegment? nextNode;
-    public ref SequenceSegment? NextNode => ref nextNode;
+    static readonly ConcurrentQueue<SequenceSegment> pool = new();
 
     public static SequenceSegment Create(ReadOnlyMemory<byte> buffer)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new SequenceSegment();
         }
@@ -145,6 +143,6 @@ internal class SequenceSegment : ReadOnlySequenceSegment<byte>, IObjectPoolNode<
         this.Memory = default;
         this.RunningIndex = 0;
         this.Next = null;
-        pool.TryPush(this);
+        pool.Enqueue(this);
     }
 }

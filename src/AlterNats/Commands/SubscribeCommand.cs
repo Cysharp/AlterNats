@@ -11,7 +11,7 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 
     public static SubscribeCommand Create(int subscriptionId, string subject)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new SubscribeCommand();
         }
@@ -24,7 +24,7 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 
     public static SubscribeCommand Create(int subscriptionId, NatsKey subject)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new SubscribeCommand();
         }
@@ -57,7 +57,7 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
 
     public static AsyncSubscribeCommand Create(int subscriptionId, string subject)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new AsyncSubscribeCommand();
         }
@@ -70,7 +70,7 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
 
     public static AsyncSubscribeCommand Create(int subscriptionId, NatsKey subject)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new AsyncSubscribeCommand();
         }

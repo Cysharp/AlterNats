@@ -234,6 +234,9 @@ namespace NatsBenchmark
             s.SetPendingLimits(10000000, 1000000000);
             subConn.Flush();
 
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
             Stopwatch sw = Stopwatch.StartNew();
 
             for (int i = 0; i < testCount; i++)

@@ -8,7 +8,7 @@ internal sealed class PongCommand : CommandBase<PongCommand>
 
     public static PongCommand Create()
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new PongCommand();
         }

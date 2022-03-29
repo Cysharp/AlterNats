@@ -10,7 +10,7 @@ internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
 
     public static UnsubscribeCommand Create(int subscriptionId)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new UnsubscribeCommand();
         }

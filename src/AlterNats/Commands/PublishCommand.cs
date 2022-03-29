@@ -16,7 +16,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
     public static PublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new PublishCommand<T>();
         }
@@ -30,7 +30,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
     public static PublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new PublishCommand<T>();
         }
@@ -69,7 +69,7 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
 
     public static AsyncPublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new AsyncPublishCommand<T>();
         }
@@ -83,7 +83,7 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
 
     public static AsyncPublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new AsyncPublishCommand<T>();
         }
@@ -125,7 +125,7 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 
     public static PublishBytesCommand Create(string subject, string? replyTo, ReadOnlyMemory<byte> value)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new PublishBytesCommand();
         }
@@ -139,7 +139,7 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 
     public static PublishBytesCommand Create(NatsKey subject, NatsKey? replyTo, byte[] value, INatsSerializer serializer)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new PublishBytesCommand();
         }

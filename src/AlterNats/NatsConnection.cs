@@ -133,7 +133,7 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(string key, TRequest request)
     {
-        
+
 
         throw new NotImplementedException();
     }
@@ -165,6 +165,34 @@ public class NatsConnection : IAsyncDisposable
     }
 
     // ResponseAsync
+
+    public static void CachePublishCommand<T>(int cacheCount)
+    {
+        if (typeof(T) == typeof(byte[]) || typeof(T) == typeof(ReadOnlyMemory<byte>))
+        {
+            var array = new PublishBytesCommand[cacheCount];
+            for (int i = 0; i < cacheCount; i++)
+            {
+                array[i] = PublishBytesCommand.Create((string)null!, default, null!);
+            }
+            for (int i = 0; i < cacheCount; i++)
+            {
+                (array[i] as ICommand).Return();
+            }
+        }
+        else
+        {
+            var array = new PublishCommand<T>[cacheCount];
+            for (int i = 0; i < cacheCount; i++)
+            {
+                array[i] = PublishCommand<T>.Create((NatsKey)null!, default, null!);
+            }
+            for (int i = 0; i < cacheCount; i++)
+            {
+                (array[i] as ICommand).Return();
+            }
+        }
+    }
 
     // internal commands.
 

@@ -1,12 +1,13 @@
 ﻿using AlterNats.Internal;
+using System.Collections.Concurrent;
 using System.Threading.Tasks.Sources;
 
 namespace AlterNats.Commands;
 
 // similar as AsyncCommandBase
-internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IObjectPoolNode<RequestAsyncCommand<TRequest, TResponse>>, IValueTaskSource<TResponse?>, IPromise, IPromise<TResponse>, IThreadPoolWorkItem
+internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValueTaskSource<TResponse?>, IPromise, IPromise<TResponse>, IThreadPoolWorkItem
 {
-    static ObjectPool<RequestAsyncCommand<TRequest, TResponse>> pool;
+    static readonly ConcurrentQueue<RequestAsyncCommand<TRequest, TResponse>> pool = new();
 
     RequestAsyncCommand<TRequest, TResponse>? nextNode;
     public ref RequestAsyncCommand<TRequest, TResponse>? NextNode => ref nextNode;
@@ -22,7 +23,7 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IObje
 
     public static RequestAsyncCommand<TRequest, TResponse> Create()
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new RequestAsyncCommand<TRequest, TResponse>();
         }

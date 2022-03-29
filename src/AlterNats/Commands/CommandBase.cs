@@ -1,35 +1,29 @@
-﻿using AlterNats.Internal;
+﻿using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks.Sources;
 
 namespace AlterNats.Commands;
 
-internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
-    where TSelf : class, IObjectPoolNode<TSelf>
+internal abstract class CommandBase<TSelf> : ICommand
+    where TSelf : class
 {
-    protected static ObjectPool<TSelf> pool;
-
-    TSelf? nextNode;
-    public ref TSelf? NextNode => ref nextNode;
+    protected static readonly ConcurrentQueue<TSelf> pool = new();
 
     public abstract void Reset();
 
     void ICommand.Return()
     {
         Reset();
-        pool.TryPush(Unsafe.As<TSelf>(this));
+        pool.Enqueue(Unsafe.As<TSelf>(this));
     }
 
     public abstract void Write(ProtocolWriter writer);
 }
 
-internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>, IValueTaskSource, IPromise, IThreadPoolWorkItem
-    where TSelf : class, IObjectPoolNode<TSelf>
+internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IPromise, IThreadPoolWorkItem
+    where TSelf : class
 {
-    protected static ObjectPool<TSelf> pool;
-
-    TSelf? nextNode;
-    public ref TSelf? NextNode => ref nextNode;
+    protected static readonly ConcurrentQueue<TSelf> pool = new();
 
     ManualResetValueTaskSourceCore<object> core;
 
@@ -79,7 +73,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSel
         {
             core.Reset();
             Reset();
-            pool.TryPush(Unsafe.As<TSelf>(this));
+            pool.Enqueue(Unsafe.As<TSelf>(this));
         }
     }
 

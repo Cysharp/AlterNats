@@ -10,7 +10,7 @@ internal sealed class AsyncConnectCommand : AsyncCommandBase<AsyncConnectCommand
 
     public static AsyncConnectCommand Create(ConnectOptions connectOptions)
     {
-        if (!pool.TryPop(out var result))
+        if (!pool.TryDequeue(out var result))
         {
             result = new AsyncConnectCommand();
         }

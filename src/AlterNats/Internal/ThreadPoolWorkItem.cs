@@ -1,10 +1,11 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace AlterNats.Internal;
 
-internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem, IObjectPoolNode<ThreadPoolWorkItem<T>>
+internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
 {
-    static ObjectPool<ThreadPoolWorkItem<T>> pool;
+    static readonly ConcurrentQueue<ThreadPoolWorkItem<T>> pool = new();
 
     ThreadPoolWorkItem<T>? nextNode;
     public ref ThreadPoolWorkItem<T>? NextNode => ref nextNode;
@@ -19,7 +20,7 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem, IObjectPoolNo
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ThreadPoolWorkItem<T> Create(Action<T?> continuation, T? value)
     {
-        if (!pool.TryPop(out var item))
+        if (!pool.TryDequeue(out var item))
         {
             item = new ThreadPoolWorkItem<T>();
         }
@@ -38,7 +39,7 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem, IObjectPoolNo
         value = default;
         if (call != null)
         {
-            pool.TryPush(this);
+            pool.Enqueue(this);
 
             try
             {
