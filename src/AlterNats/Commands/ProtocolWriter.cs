@@ -179,6 +179,68 @@ internal sealed class ProtocolWriter
         WriteConstant(CommandConstants.NewLine);
     }
 
+    public void WritePublish<T>(in NatsKey subject, ReadOnlyMemory<byte> inboxPrefix, int id, T? value, INatsSerializer serializer)
+    {
+        Span<byte> idBytes = stackalloc byte[10];
+        if (Utf8Formatter.TryFormat(id, idBytes, out var written))
+        {
+            idBytes = idBytes.Slice(0, written);
+        }
+
+        var offset = 0;
+        var maxLengthWithoutPayload = CommandConstants.PubWithPadding.Length
+            + subject.LengthWithSpacePadding
+            + (inboxPrefix.Length + idBytes.Length + 1) // with space
+            + MaxIntStringLength
+            + NewLineLength;
+
+        var writableSpan = writer.GetSpan(maxLengthWithoutPayload);
+
+        CommandConstants.PubWithPadding.CopyTo(writableSpan);
+        offset += CommandConstants.PubWithPadding.Length;
+
+        if (subject.buffer != null)
+        {
+            subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+            offset += subject.buffer.Length;
+        }
+        else
+        {
+            Encoding.ASCII.GetBytes(subject.Key.AsSpan(), writableSpan.Slice(offset));
+            offset += subject.Key.Length;
+            writableSpan.Slice(offset)[0] = (byte)' ';
+            offset += 1;
+        }
+
+        // build reply-to
+        inboxPrefix.Span.CopyTo(writableSpan.Slice(offset));
+        offset += inboxPrefix.Length;
+        idBytes.CopyTo(writableSpan.Slice(offset));
+        offset += idBytes.Length;
+        writableSpan.Slice(offset)[0] = (byte)' ';
+        offset += 1;
+
+        // Advance for written.
+        writer.Advance(offset);
+
+        // preallocate range for write #bytes(write after serialized)
+        var preallocatedRange = writer.PreAllocate(MaxIntStringLength);
+        offset += MaxIntStringLength;
+
+        CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
+        writer.Advance(CommandConstants.NewLine.Length);
+
+        var payloadLength = serializer.Serialize(writer, value);
+        var payloadLengthSpan = writer.GetSpanInPreAllocated(preallocatedRange);
+        payloadLengthSpan.Fill((byte)' ');
+        if (!Utf8Formatter.TryFormat(payloadLength, payloadLengthSpan, out written))
+        {
+            throw new Exception(); // TODO: exception
+        }
+
+        WriteConstant(CommandConstants.NewLine);
+    }
+
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#sub
     // SUB <subject> [queue group] <sid>
     public void WriteSubscribe(int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)

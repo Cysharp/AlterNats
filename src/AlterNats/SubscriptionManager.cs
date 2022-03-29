@@ -28,7 +28,7 @@ internal sealed class SubscriptionManager : IDisposable
             {
                 if (subscription.ElementType != typeof(T))
                 {
-                    throw new InvalidOperationException($"Register different type on same key. RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
+                    throw new InvalidOperationException($"Register different type on same key. Key: {key} RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
                 }
 
                 var handlerId = subscription.AddHandler(handler);
@@ -61,7 +61,7 @@ internal sealed class SubscriptionManager : IDisposable
             {
                 if (subscription.ElementType != typeof(T))
                 {
-                    throw new InvalidOperationException($"Register different type on same key. RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
+                    throw new InvalidOperationException($"Register different type on same key. Key: {key} RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
                 }
 
                 handlerId = subscription.AddHandler(handler);
@@ -92,6 +92,54 @@ internal sealed class SubscriptionManager : IDisposable
         return returnSubscription;
     }
 
+    public async ValueTask<IDisposable> AddRequestHandlerAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> handler)
+    {
+        int sid;
+        RefCountSubscription? subscription;
+        int handlerId;
+
+        lock (gate)
+        {
+            if (byStringKey.TryGetValue(key, out subscription))
+            {
+                if (!subscription.IsRequestHandler)
+                {
+                    throw new InvalidOperationException($"Already registered not handler. Key: {key}.");
+                }
+
+                if (subscription.ElementType != typeof(TRequest) || subscription.ResponseType != typeof(TResponse))
+                {
+                    throw new InvalidOperationException($"Register different type on same key. Key: {key} RegisteredType: ({subscription.ElementType.FullName},{subscription.ResponseType!.FullName}) NewType: ({typeof(TRequest).FullName}, {typeof(TResponse).FullName}");
+                }
+
+                handlerId = subscription.AddHandler(handler);
+                return new Subscription(subscription, handlerId);
+            }
+            else
+            {
+                sid = Interlocked.Increment(ref subscriptionId);
+
+                subscription = new RefCountSubscription(this, sid, key, typeof(TRequest), typeof(TResponse));
+                handlerId = subscription.AddHandler(handler);
+                bySubscriptionId[sid] = subscription;
+                byStringKey[key] = subscription;
+            }
+        }
+
+        var returnSubscription = new Subscription(subscription, handlerId);
+        try
+        {
+            await connection.SubscribeAsync(sid, key).ConfigureAwait(false);
+        }
+        catch
+        {
+            returnSubscription.Dispose(); // can't subscribed, remove from holder.
+            throw;
+        }
+
+        return returnSubscription;
+    }
+
     internal void Remove(string key, int subscriptionId)
     {
         // inside lock from RefCountSubscription.RemoveHandler
@@ -101,10 +149,35 @@ internal sealed class SubscriptionManager : IDisposable
 
     public void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
     {
+        // TODO: lock
+
         if (bySubscriptionId.TryGetValue(subscriptionId, out var subscription))
         {
             var list = subscription.Handlers.GetValues();
             MessagePublisher.Publish(subscription.ElementType, connection.Options, buffer, list);
+        }
+    }
+
+    public void PublishToRequestHandler(int subscriptionId, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
+    {
+        // TODO: lock
+
+        if (bySubscriptionId.TryGetValue(subscriptionId, out var subscription))
+        {
+            if (!subscription.IsRequestHandler)
+            {
+                throw new InvalidOperationException($"Registered handler is not request handler.");
+            }
+
+            var list = subscription.Handlers.GetValues();
+            foreach (var item in list)
+            {
+                if (item != null)
+                {
+                    RequestPublisher.PublishRequest(subscription.ElementType, subscription.ResponseType!, connection, replyTo, buffer, item);
+                    return;
+                }
+            }
         }
     }
 
@@ -153,8 +226,11 @@ internal sealed class RefCountSubscription
     public int SubscriptionId { get; }
     public string Key { get; }
     public int ReferenceCount { get; private set; }
-    public Type ElementType { get; }
+    public Type ElementType { get; } // or RequestType
+    public Type? ResponseType { get; }
     public FreeList<object> Handlers { get; }
+
+    public bool IsRequestHandler => ResponseType != null;
 
     public RefCountSubscription(SubscriptionManager manager, int subscriptionId, string key, Type elementType)
     {
@@ -163,6 +239,17 @@ internal sealed class RefCountSubscription
         Key = key;
         ReferenceCount = 0;
         ElementType = elementType;
+        Handlers = new FreeList<object>();
+    }
+
+    public RefCountSubscription(SubscriptionManager manager, int subscriptionId, string key, Type requestType, Type responseType)
+    {
+        this.manager = manager;
+        SubscriptionId = subscriptionId;
+        Key = key;
+        ReferenceCount = 0;
+        ElementType = requestType;
+        ResponseType = responseType;
         Handlers = new FreeList<object>();
     }
 

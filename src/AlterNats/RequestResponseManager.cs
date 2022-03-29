@@ -1,6 +1,7 @@
 ﻿using AlterNats.Commands;
 using System.Buffers;
 using System.Buffers.Text;
+using System.Text;
 
 namespace AlterNats;
 
@@ -16,6 +17,7 @@ internal sealed class RequestResponseManager
 
     // ID: Handler
     Dictionary<int, (Type responseType, object handler)> responseBoxes = new();
+    IDisposable? globalSubscription;
 
     public RequestResponseManager(NatsConnection connection)
     {
@@ -24,44 +26,42 @@ internal sealed class RequestResponseManager
 
 
 
-    public string Add<TRequest, TResponse>(string key, TRequest request)
+    public ValueTask<TResponse?> AddAsync<TRequest, TResponse>(in NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request)
     {
-        // Subscribe per connection.
-        // _INBOX.RANDOM-GUID.ID
-
+        // TODO:lock...
         var id = Interlocked.Increment(ref requestId);
 
-        // TODO:...
-        var replyTo = $"{connection.Options.InboxPrefix}{Guid.NewGuid()}.{id}";
+
+
+
+        var command = RequestAsyncCommand<TRequest, TResponse>.Create(key, inBoxPrefix, id, request, connection.Options.Serializer);
+
+
+        // Subscribe connection wide inbox
+        if (globalSubscription == null)
+        {
+            var globalSubscribeKey = $"{Encoding.ASCII.GetString(inBoxPrefix.Span)}*";
+            globalSubscription = connection.Subscribe<byte[]>(globalSubscribeKey, _ => { });
+        }
+
+
+        responseBoxes.Add(id, (typeof(TResponse), command));
+
+        connection.PostCommand(command);
 
         
 
-
-        // var command = RequestAsyncCommand<TRequest, TResponse>.Create(request);
-
-
-        // responseBoxes.Add(id, (typeof(TResponse), command));
-
-        return replyTo;
+        return command.AsValueTask();
     }
 
 
 
 
-    public void PublishToResponseHandler(ReadOnlySpan<byte> replyTo, in ReadOnlySequence<byte> buffer)
+    public void PublishToResponseHandler(int id, in ReadOnlySequence<byte> buffer)
     {
-        // Parse: _INBOX.RANDOM-GUID.ID
-        var lastIndex = replyTo.LastIndexOf((byte)'.');
-        if (lastIndex == -1) return;
-
-        if (!Utf8Parser.TryParse(replyTo.Slice(lastIndex), out int id, out _))
-        {
-            return;
-        }
-
         if (responseBoxes.Remove(id, out var box))
         {
-            ResponsePublisher.Publish(box.responseType, connection.Options, buffer, box.handler);
+            ResponsePublisher.PublishResponse(box.responseType, connection.Options, buffer, box.handler);
         }
     }
 }

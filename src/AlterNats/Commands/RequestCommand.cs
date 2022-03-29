@@ -13,18 +13,18 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValu
     static readonly ConcurrentQueue<RequestAsyncCommand<TRequest, TResponse>> pool = new();
 
     ManualResetValueTaskSourceCore<TResponse?> core;
-    string? stringKey;
-    NatsKey? natsKey;
+    NatsKey key;
     TRequest? request;
     TResponse? response;
     ReadOnlyMemory<byte> inboxPrefix;
     int id;
+    INatsSerializer? serializer;
 
     RequestAsyncCommand()
     {
     }
 
-    public static RequestAsyncCommand<TRequest, TResponse> Create(string key, ReadOnlyMemory<byte> inboxPrefix, int id, TRequest request)
+    public static RequestAsyncCommand<TRequest, TResponse> Create(in NatsKey key, ReadOnlyMemory<byte> inboxPrefix, int id, TRequest request, INatsSerializer serializer)
     {
         if (!pool.TryDequeue(out var result))
         {
@@ -32,10 +32,11 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValu
             result = new RequestAsyncCommand<TRequest, TResponse>();
         }
 
-        result.stringKey = key;
+        result.key = key;
         result.inboxPrefix = inboxPrefix;
         result.id = id;
         result.request = request;
+        result.serializer = serializer;
 
         return result;
     }
@@ -59,9 +60,11 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValu
         finally
         {
             core.Reset();
+            key = default;
             request = default;
             response = default;
             inboxPrefix = null;
+            serializer = null;
             id = 0;
 
             if (count < NatsConnection.MaxCommandCacheSize)
@@ -110,10 +113,7 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValu
 
     void ICommand.Write(ProtocolWriter writer)
     {
-        // TODO:not yet implemented.
-        //throw new NotImplementedException();
-
-        // writer.WritePublish(
+        writer.WritePublish(key, inboxPrefix, id, request, serializer!);
     }
 
     public void SetResult(TResponse result)

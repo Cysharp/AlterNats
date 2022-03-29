@@ -9,50 +9,44 @@ using ZLogger;
 
 public class Program
 {
-    public static void Main()
+    public static async Task Main()
     {
-        //var provider = new ServiceCollection()
-        //    .AddLogging(x =>
-        //    {
-        //        x.ClearProviders();
-        //        x.SetMinimumLevel(LogLevel.Trace);
-        //        x.AddZLoggerConsole();
-        //    })
-        //    .BuildServiceProvider();
+        var provider = new ServiceCollection()
+            .AddLogging(x =>
+            {
+                x.ClearProviders();
+                x.SetMinimumLevel(LogLevel.Trace);
+                x.AddZLoggerConsole();
+            })
+            .BuildServiceProvider();
 
-        //var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+        var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
 
-        //var connection = new NatsConnection(NatsOptions.Default with
-        //{
-        //    // LoggerFactory = loggerFactory,
-        //    Serializer = new MessagePackNatsSerializer(),
-        //    ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
-        //});
+        var connection = new NatsConnection(NatsOptions.Default with
+        {
+            LoggerFactory = loggerFactory,
+            Serializer = new MessagePackNatsSerializer(),
+            ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
+        });
 
-        // connection.ConnectAsync().AsTask().Wait();
+        connection.ConnectAsync().AsTask().Wait();
 
 
         var key = new NatsKey("foobar");
-        var serializer = new MessagePackNatsSerializer();
 
-        //// CalcCommandPushPop(key, new MessagePackNatsSerializer());
+        Console.WriteLine("GO?");
 
-        //CalcSubscribe(key, connection);
-
-        //for (int i = 0; i < 100; i++)
-        //{
-        //    for (int j = 0; j < 100; j++)
-        //    {
-        //        connection.Publish(key, new MyVector3());
-        //    }
-        //    Thread.Sleep(100);
-        //}
+        var d = await connection.SubscribeRequestAsync<int, int>(key, x => x * 2);
 
 
-        //Console.ReadLine();
+        var v = await connection.RequestAsync<int, int>(key, 9999);
 
-        var p = PublishCommand<MyVector3>.Create(key, new MyVector3(), serializer);
-        (p as ICommand).Return();
+
+        Console.WriteLine("RETURN!" + v);
+
+
+
+
     }
 
     static void CalcCommandPushPop(NatsKey key, INatsSerializer serializer)

@@ -88,7 +88,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         }
 
                         var msgHeader = buffer.Slice(0, positionBeforePayload.Value);
-                        var (subscriptionId, payloadLength) = ParseMessageHeader(msgHeader);
+                        var (subscriptionId, payloadLength, replyTo, reponseId) = ParseMessageHeader(msgHeader);
 
                         if (payloadLength == 0)
                         {
@@ -107,7 +107,18 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                             }
 
                             // publish to registered handlers.
-                            connection.PublishToClientHandlers(subscriptionId, ReadOnlySequence<byte>.Empty);
+                            if (replyTo != null)
+                            {
+                                connection.PublishToRequestHandler(subscriptionId, replyTo.Value, buffer);
+                            }
+                            else if (reponseId != null)
+                            {
+                                connection.PublishToResponseHandler(reponseId.Value, buffer);
+                            }
+                            else
+                            {
+                                connection.PublishToClientHandlers(subscriptionId, ReadOnlySequence<byte>.Empty);
+                            }
                         }
                         else
                         {
@@ -128,7 +139,18 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                             buffer = buffer.Slice(buffer.GetPosition(2, payloadSlice.End)); // payload + \r\n
 
                             // publish to registered handlers.
-                            connection.PublishToClientHandlers(subscriptionId, payloadSlice);
+                            if (replyTo != null)
+                            {
+                                connection.PublishToRequestHandler(subscriptionId, replyTo.Value, payloadSlice);
+                            }
+                            else if (reponseId != null)
+                            {
+                                connection.PublishToResponseHandler(reponseId.Value, payloadSlice);
+                            }
+                            else
+                            {
+                                connection.PublishToClientHandlers(subscriptionId, payloadSlice);
+                            }
                         }
                     }
                     else
@@ -307,17 +329,31 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#msg
     // MSG <subject> <sid> [reply-to] <#bytes>\r\n[payload]
-    static (int subscriptionId, int payloadLength) ParseMessageHeader(ReadOnlySpan<byte> msgHeader)
+    (int subscriptionId, int payloadLength, NatsKey? replyTo, int? responseId) ParseMessageHeader(ReadOnlySpan<byte> msgHeader)
     {
         msgHeader = msgHeader.Slice(4);
-        Split(msgHeader, out var subject, out msgHeader); // subject string no use
+        Split(msgHeader, out var subject, out msgHeader);
         Split(msgHeader, out var sid, out msgHeader);
         Split(msgHeader, out var replyToOrBytes, out msgHeader);
         if (msgHeader.Length == 0)
         {
+            int? responseId = null;
+            // Parse: _INBOX.RANDOM-GUID.ID
+            if (subject.StartsWith(connection.indBoxPrefix.Span))
+            {
+                var lastIndex = subject.LastIndexOf((byte)'.');
+                if (lastIndex != -1)
+                {
+                    if (Utf8Parser.TryParse(subject.Slice(lastIndex + 1), out int id, out _))
+                    {
+                        responseId = id;
+                    }
+                }
+            }
+
             var subscriptionId = GetInt32(sid);
             var payloadLength = GetInt32(replyToOrBytes);
-            return (subscriptionId, payloadLength);
+            return (subscriptionId, payloadLength, null, responseId);
         }
         else
         {
@@ -326,14 +362,12 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
             var subscriptionId = GetInt32(sid);
             var payloadLength = GetInt32(bytesSlice);
-
-            // TODO:replayto box.
-            var replyToString = Encoding.UTF8.GetString(replyTo);
-            return (subscriptionId, payloadLength);
+            var replyToKey = new NatsKey(Encoding.ASCII.GetString(replyTo));
+            return (subscriptionId, payloadLength, replyToKey, null);
         }
     }
 
-    unsafe static (int subscriptionId, int payloadLength) ParseMessageHeader(in ReadOnlySequence<byte> msgHeader)
+    unsafe (int subscriptionId, int payloadLength, NatsKey? replyTo, int? responseId) ParseMessageHeader(in ReadOnlySequence<byte> msgHeader)
     {
         if (msgHeader.IsSingleSegment)
         {

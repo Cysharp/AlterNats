@@ -1,6 +1,7 @@
 ﻿using AlterNats.Commands;
 using System.Buffers;
 using System.Net.Sockets;
+using System.Text;
 
 namespace AlterNats;
 
@@ -17,6 +18,7 @@ public class NatsConnection : IAsyncDisposable
     readonly NatsReadProtocolProcessor socketReader;
     readonly NatsPipeliningSocketWriter socketWriter;
     readonly SubscriptionManager subscriptionManager;
+    readonly RequestResponseManager requestResponseManager;
 
     TaskCompletionSource waitForConnectSource; // when reconnect, make new source.
 
@@ -24,6 +26,7 @@ public class NatsConnection : IAsyncDisposable
     public NatsConnectionState ConnectionState { get; private set; }
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
     internal Task WaitForConnect => waitForConnectSource.Task;
+    internal ReadOnlyMemory<byte> indBoxPrefix;
 
     public NatsConnection()
         : this(NatsOptions.Default)
@@ -35,6 +38,7 @@ public class NatsConnection : IAsyncDisposable
         this.Options = options;
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForConnectSource = new TaskCompletionSource();
+        this.indBoxPrefix = Encoding.ASCII.GetBytes($"{options.InboxPrefix}{Guid.NewGuid()}.");
 
         this.socket = new Socket(Socket.OSSupportsIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         if (Socket.OSSupportsIPv6)
@@ -49,6 +53,7 @@ public class NatsConnection : IAsyncDisposable
         this.socketWriter = new NatsPipeliningSocketWriter(socket, Options);
         this.socketReader = new NatsReadProtocolProcessor(socket, this);
         this.subscriptionManager = new SubscriptionManager(this);
+        this.requestResponseManager = new RequestResponseManager(this);
     }
 
     /// <summary>
@@ -128,21 +133,15 @@ public class NatsConnection : IAsyncDisposable
     // TODO:  this API?
 
 
-    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(string key, TRequest request)
+    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
     {
-
-
-        throw new NotImplementedException();
+        return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request)!; // NOTE:return nullable?
     }
 
-    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> responseHandler)
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> responseHandler)
     {
-        // _INBOX.
-        var replyTo = $"{Options.InboxPrefix}{Guid.NewGuid().ToString()}.";
-
-        throw new NotImplementedException();
+        return subscriptionManager.AddRequestHandlerAsync(key.Key, responseHandler);
     }
-
 
     // TODO: Remove fire-and-forget subscribe?
 
@@ -188,9 +187,24 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(UnsubscribeCommand.Create(subscriptionId));
     }
 
+    internal void PostCommand(ICommand command)
+    {
+        socketWriter.Post(command);
+    }
+
     internal void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
     {
         subscriptionManager.PublishToClientHandlers(subscriptionId, buffer);
+    }
+
+    internal void PublishToRequestHandler(int subscriptionId, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
+    {
+        subscriptionManager.PublishToRequestHandler(subscriptionId, replyTo, buffer);
+    }
+
+    internal void PublishToResponseHandler(int requestId, in ReadOnlySequence<byte> buffer)
+    {
+        requestResponseManager.PublishToResponseHandler(requestId, buffer);
     }
 
     internal void PostDirectWrite(string protocol)
