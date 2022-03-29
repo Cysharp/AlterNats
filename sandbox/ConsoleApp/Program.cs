@@ -32,52 +32,7 @@ public class Program
         var connection1 = new NatsConnection(options);
         await connection1.ConnectAsync();
 
-        var connection2 = new NatsConnection(options);
-        await connection2.ConnectAsync();
-
-        var connection3 = new NatsConnection(options);
-        await connection3.ConnectAsync();
-
-        var key = new NatsKey("foobar");
-        var q = new NatsKey("qqq");
-
-
-        //await connection1.SubscribeAsync(key, q, (int x) =>
-        //{
-        //    Console.WriteLine("ONE:" + x);
-        //});
-
-        //await connection2.SubscribeAsync(key, q, (int x) =>
-        //{
-        //    Console.WriteLine("TWO:" + x);
-        //});
-
-        //for (int i = 0; i < 200; i++)
-        //{
-        //    await connection3.PublishAsync(key, i);
-        //}
-
-
-        await connection1.SubscribeAsync(key.Key, (int x) =>
-        {
-            Console.WriteLine(x);
-        });
-
-        await connection2.PublishBatchAsync(new[]
-        {
-            ("foobar", 100),
-            ("foobar", 101),
-            ("foobar", 102),
-            ("foobar", 103),
-            ("foobar", 104),
-        });
-
-        var bytes = new byte[] { 1, 20, 255 };
-        await connection1.PublishAsync("foo", bytes);
-
-
-
-        Console.ReadLine();
+        
 
     }
 

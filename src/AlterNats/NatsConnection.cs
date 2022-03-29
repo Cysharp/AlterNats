@@ -51,7 +51,7 @@ public class NatsConnection : IAsyncDisposable
         {
             socket.DualMode = true;
         }
-
+        
         socket.NoDelay = true;
         socket.SendBufferSize = 0;
         socket.ReceiveBufferSize = 0;
@@ -95,7 +95,12 @@ public class NatsConnection : IAsyncDisposable
     {
         ConnectionState = NatsConnectionState.Reconnecting;
 
-        throw new NotImplementedException();
+        // Cleanup
+
+        // Resubscribe
+
+
+        
 
     }
 
