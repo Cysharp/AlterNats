@@ -46,7 +46,7 @@ namespace NatsBenchmark
 {
     partial class Benchmark
     {
-        void RunPubSubAlterNats(string testName, long testCount, long testSize)
+        void RunPubSubAlterNats(string testName, long testCount, long testSize, bool disableShow = false)
         {
             var provider = new ServiceCollection()
                 .AddLogging(x =>
@@ -115,13 +115,16 @@ namespace NatsBenchmark
             }
             sw.Stop();
 
-            PrintResults(testName, sw, testCount, testSize);
+            if (!disableShow)
+            {
+                PrintResults(testName, sw, testCount, testSize);
+            }
 
             pubConn.DisposeAsync().AsTask().Wait();
             subConn.DisposeAsync().AsTask().Wait();
         }
 
-        void RunPubSubAlterNatsVector3(string testName, long testCount)
+        void RunPubSubAlterNatsVector3(string testName, long testCount, bool disableShow = false)
         {
             var provider = new ServiceCollection()
                 .AddLogging(x =>
@@ -201,7 +204,10 @@ namespace NatsBenchmark
             }
             sw.Stop();
 
-            PrintResults(testName, sw, testCount, 16);
+            if (!disableShow)
+            {
+                PrintResults(testName, sw, testCount, 16);
+            }
 
             pubConn.DisposeAsync().AsTask().Wait();
             subConn.DisposeAsync().AsTask().Wait();
@@ -346,46 +352,34 @@ namespace NatsBenchmark
 
         void runSuite()
         {
-            NatsConnection.CachePublishCommand<byte[]>(10000000);
-            NatsConnection.CachePublishCommand<Vector3>(10000000);
+            // 10000000
+            // NatsConnection.MaxCommandCacheSize = 0;
+            //NatsConnection.CachePublishCommand<byte[]>(10000000);
+            //NatsConnection.CachePublishCommand<Vector3>(10000000);
+
+            RunPubSubAlterNats("AlterNats8b", 10000000, 8, disableShow: true);
+            RunPubSubAlterNatsVector3("AlterNatsV3", 10000000, disableShow: true);
+
+            Console.WriteLine(NatsConnection.GetPublishCommandCacheSize<byte[]>(false));
+            Console.WriteLine(NatsConnection.GetPublishCommandCacheSize<Vector3>(false));
 
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
-
-            //runPub("PubOnlyNo", 10000000, 0);
-            //runPub("PubOnly8b", 10000000, 8);
-            //runPub("PubOnly32b", 10000000, 32);
-            //runPub("PubOnly256b", 10000000, 256);
-            //runPub("PubOnly512b", 10000000, 512);
-            //runPub("PubOnly1k", 1000000, 1024);
-            //runPub("PubOnly4k", 500000, 1024 * 4);
-            //runPub("PubOnly8k", 100000, 1024 * 8);
-
-            runPubSubVector3("PubSubVector3", 10000000);
-
-            runPubSub("PubSubNo", 10000000, 0);
-            runPubSub("PubSub8b", 10000000, 8);
-            runPubSub("PubSub32b", 10000000, 32);
-            runPubSub("PubSub100b", 10000000, 100);
-            runPubSub("PubSub256b", 10000000, 256);
-            runPubSub("PubSub512b", 500000, 512);
-            runPubSub("PubSub1k", 500000, 1024);
-            runPubSub("PubSub4k", 500000, 1024 * 4);
-            runPubSub("PubSub8k", 100000, 1024 * 8);
-
-            {
-
-            }
-
+            //runPubSubVector3("PubSubVector3", 10000000);
+            //runPubSub("PubSubNo", 10000000, 0);
+            //runPubSub("PubSub8b", 10000000, 8);
+            //runPubSub("PubSub32b", 10000000, 32);
+            //runPubSub("PubSub100b", 10000000, 100);
+            //runPubSub("PubSub256b", 10000000, 256);
+            //runPubSub("PubSub512b", 500000, 512);
+            //runPubSub("PubSub1k", 500000, 1024);
+            //runPubSub("PubSub4k", 500000, 1024 * 4);
+            //runPubSub("PubSub8k", 100000, 1024 * 8);
 
 
             RunPubSubAlterNatsVector3("AlterNatsV3", 10000000);
-            // RunPubSubAlterNatsVector3("AlterNatsV3", 10000000);
-
-
-
             RunPubSubAlterNats("AlterNatsNo", 10000000, 0);
             RunPubSubAlterNats("AlterNats8b", 10000000, 8);
             RunPubSubAlterNats("AlterNats32b", 10000000, 32);

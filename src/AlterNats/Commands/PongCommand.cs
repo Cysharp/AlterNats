@@ -8,7 +8,7 @@ internal sealed class PongCommand : CommandBase<PongCommand>
 
     public static PongCommand Create()
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new PongCommand();
         }
@@ -20,7 +20,7 @@ internal sealed class PongCommand : CommandBase<PongCommand>
         writer.WritePong();
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
     }
 }

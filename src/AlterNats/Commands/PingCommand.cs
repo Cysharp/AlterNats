@@ -8,7 +8,7 @@ internal sealed class PingCommand : CommandBase<PingCommand>
 
     public static PingCommand Create()
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new PingCommand();
         }
@@ -20,7 +20,7 @@ internal sealed class PingCommand : CommandBase<PingCommand>
         writer.WritePing();
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
     }
 }
@@ -33,14 +33,14 @@ internal sealed class AsyncPingCommand : AsyncCommandBase<AsyncPingCommand>
 
     public static AsyncPingCommand Create()
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new AsyncPingCommand();
         }
         return result;
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
     }
 

@@ -16,7 +16,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
     public static PublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new PublishCommand<T>();
         }
@@ -30,7 +30,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
     public static PublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new PublishCommand<T>();
         }
@@ -47,7 +47,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
         writer.WritePublish(subject!, null, value, serializer!);
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         subject = null;
         value = default;
@@ -69,7 +69,7 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
 
     public static AsyncPublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new AsyncPublishCommand<T>();
         }
@@ -83,7 +83,7 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
 
     public static AsyncPublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new AsyncPublishCommand<T>();
         }
@@ -100,7 +100,7 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
         writer.WritePublish(subject!, null, value, serializer!);
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         subject = null;
         value = default;
@@ -125,7 +125,7 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 
     public static PublishBytesCommand Create(string subject, string? replyTo, ReadOnlyMemory<byte> value)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new PublishBytesCommand();
         }
@@ -137,9 +137,9 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
         return result;
     }
 
-    public static PublishBytesCommand Create(NatsKey subject, NatsKey? replyTo, byte[] value, INatsSerializer serializer)
+    public static PublishBytesCommand Create(NatsKey subject, NatsKey? replyTo, byte[] value)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new PublishBytesCommand();
         }
@@ -163,7 +163,7 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
         }
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         stringSubject = null;
         stringReplyTo = null;

@@ -10,7 +10,7 @@ internal sealed class AsyncConnectCommand : AsyncCommandBase<AsyncConnectCommand
 
     public static AsyncConnectCommand Create(ConnectOptions connectOptions)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new AsyncConnectCommand();
         }
@@ -20,7 +20,7 @@ internal sealed class AsyncConnectCommand : AsyncCommandBase<AsyncConnectCommand
         return result;
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         connectOptions = null;
     }

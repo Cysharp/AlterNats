@@ -10,7 +10,7 @@ internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
 
     public static UnsubscribeCommand Create(int subscriptionId)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new UnsubscribeCommand();
         }
@@ -25,7 +25,7 @@ internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
         writer.WriteUnsubscribe(subscriptionId, null);
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         subscriptionId = 0;
     }

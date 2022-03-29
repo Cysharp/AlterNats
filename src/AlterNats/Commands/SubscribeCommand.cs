@@ -11,7 +11,7 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 
     public static SubscribeCommand Create(int subscriptionId, string subject)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new SubscribeCommand();
         }
@@ -24,7 +24,7 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 
     public static SubscribeCommand Create(int subscriptionId, NatsKey subject)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new SubscribeCommand();
         }
@@ -40,7 +40,7 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
         writer.WriteSubscribe(subscriptionId, subject!);
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         subject = null;
     }
@@ -57,7 +57,7 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
 
     public static AsyncSubscribeCommand Create(int subscriptionId, string subject)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new AsyncSubscribeCommand();
         }
@@ -70,7 +70,7 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
 
     public static AsyncSubscribeCommand Create(int subscriptionId, NatsKey subject)
     {
-        if (!pool.TryDequeue(out var result))
+        if (!TryRent(out var result))
         {
             result = new AsyncSubscribeCommand();
         }
@@ -86,7 +86,7 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
         writer.WriteSubscribe(subscriptionId, subject!);
     }
 
-    public override void Reset()
+    protected override void Reset()
     {
         subject = null;
     }

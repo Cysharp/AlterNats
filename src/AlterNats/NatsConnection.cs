@@ -121,12 +121,11 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(command);
     }
 
-    public void Publish(string key, string replyTo, byte[] value)
+    public void Publish(NatsKey key, byte[] value)
     {
-        var command = PublishBytesCommand.Create(key, replyTo, value);
+        var command = PublishBytesCommand.Create(key, null, value);
         socketWriter.Post(command);
     }
-
 
     // TODO:  this API?
 
@@ -166,33 +165,6 @@ public class NatsConnection : IAsyncDisposable
 
     // ResponseAsync
 
-    public static void CachePublishCommand<T>(int cacheCount)
-    {
-        if (typeof(T) == typeof(byte[]) || typeof(T) == typeof(ReadOnlyMemory<byte>))
-        {
-            var array = new PublishBytesCommand[cacheCount];
-            for (int i = 0; i < cacheCount; i++)
-            {
-                array[i] = PublishBytesCommand.Create((string)null!, default, null!);
-            }
-            for (int i = 0; i < cacheCount; i++)
-            {
-                (array[i] as ICommand).Return();
-            }
-        }
-        else
-        {
-            var array = new PublishCommand<T>[cacheCount];
-            for (int i = 0; i < cacheCount; i++)
-            {
-                array[i] = PublishCommand<T>.Create((NatsKey)null!, default, null!);
-            }
-            for (int i = 0; i < cacheCount; i++)
-            {
-                (array[i] as ICommand).Return();
-            }
-        }
-    }
 
     // internal commands.
 
@@ -236,5 +208,66 @@ public class NatsConnection : IAsyncDisposable
 
         await socket.DisconnectAsync(false); // TODO:if socket is not connected?
         socket.Dispose();
+    }
+
+    // static Cache operations.
+
+    public static int MaxCommandCacheSize { get; set; } = int.MaxValue;
+
+
+    public static int GetPublishCommandCacheSize<T>(bool async)
+    {
+        if (typeof(T) == typeof(byte[]) || typeof(T) == typeof(ReadOnlyMemory<byte>))
+        {
+            if (async)
+            {
+                // TODO:AsyncPublishBytes
+                // return PublishBytesCommand<T>.GetCacheCount;
+                return 0;
+            }
+            else
+            {
+                return PublishBytesCommand.GetCacheCount;
+            }
+        }
+        else
+        {
+            if (async)
+            {
+                return AsyncPublishCommand<T>.GetCacheCount;
+            }
+            else
+            {
+                return PublishCommand<T>.GetCacheCount;
+            }
+        }
+    }
+
+    public static void CachePublishCommand<T>(int cacheCount)
+    {
+        if (typeof(T) == typeof(byte[]) || typeof(T) == typeof(ReadOnlyMemory<byte>))
+        {
+            var array = new PublishBytesCommand[cacheCount];
+            for (int i = 0; i < cacheCount; i++)
+            {
+                array[i] = PublishBytesCommand.Create((string)null!, default, null!);
+            }
+            for (int i = 0; i < cacheCount; i++)
+            {
+                (array[i] as ICommand).Return();
+            }
+        }
+        else
+        {
+            var array = new PublishCommand<T>[cacheCount];
+            for (int i = 0; i < cacheCount; i++)
+            {
+                array[i] = PublishCommand<T>.Create((NatsKey)null!, default, null!);
+            }
+            for (int i = 0; i < cacheCount; i++)
+            {
+                (array[i] as ICommand).Return();
+            }
+        }
     }
 }

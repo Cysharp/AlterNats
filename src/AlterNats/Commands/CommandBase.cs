@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks.Sources;
 
@@ -7,14 +8,35 @@ namespace AlterNats.Commands;
 internal abstract class CommandBase<TSelf> : ICommand
     where TSelf : class
 {
-    protected static readonly ConcurrentQueue<TSelf> pool = new();
+    static int count; // approximately count
+    static readonly ConcurrentQueue<TSelf> pool = new();
 
-    public abstract void Reset();
+    internal static int GetCacheCount => count;
+
+    protected abstract void Reset();
+
+    protected static bool TryRent([NotNullWhen(true)] out TSelf? self)
+    {
+        if (pool.TryDequeue(out self!))
+        {
+            Interlocked.Decrement(ref count);
+            return true;
+        }
+        else
+        {
+            self = default;
+            return false;
+        }
+    }
 
     void ICommand.Return()
     {
         Reset();
-        pool.Enqueue(Unsafe.As<TSelf>(this));
+        if (count < NatsConnection.MaxCommandCacheSize)
+        {
+            pool.Enqueue(Unsafe.As<TSelf>(this));
+            Interlocked.Increment(ref count);
+        }
     }
 
     public abstract void Write(ProtocolWriter writer);
@@ -23,7 +45,24 @@ internal abstract class CommandBase<TSelf> : ICommand
 internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IPromise, IThreadPoolWorkItem
     where TSelf : class
 {
-    protected static readonly ConcurrentQueue<TSelf> pool = new();
+    static int count; // approximately count
+    static readonly ConcurrentQueue<TSelf> pool = new();
+
+    internal static int GetCacheCount => count;
+
+    protected static bool TryRent([NotNullWhen(true)] out TSelf? self)
+    {
+        if (pool.TryDequeue(out self!))
+        {
+            Interlocked.Decrement(ref count);
+            return true;
+        }
+        else
+        {
+            self = default;
+            return false;
+        }
+    }
 
     ManualResetValueTaskSourceCore<object> core;
 
@@ -34,7 +73,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IP
 
     public abstract void Write(ProtocolWriter writer);
 
-    public abstract void Reset();
+    protected abstract void Reset();
 
 
     public ValueTask AsValueTask()
@@ -73,7 +112,11 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IP
         {
             core.Reset();
             Reset();
-            pool.Enqueue(Unsafe.As<TSelf>(this));
+            if (count < NatsConnection.MaxCommandCacheSize)
+            {
+                pool.Enqueue(Unsafe.As<TSelf>(this));
+                Interlocked.Increment(ref count);
+            }
         }
     }
 
