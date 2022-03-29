@@ -9,3 +9,8 @@ internal interface ICommand
     void Return();
     void Write(ProtocolWriter writer);
 }
+
+internal interface IBatchCommand : ICommand
+{
+    new int Write(ProtocolWriter writer);
+}

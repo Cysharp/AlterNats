@@ -76,6 +76,79 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
     }
 }
 
+internal sealed class AsyncPublishBatchCommand<T> : AsyncCommandBase<AsyncPublishBatchCommand<T>>, IBatchCommand
+{
+    IEnumerable<(NatsKey subject, T? value)>? values1;
+    IEnumerable<(string subject, T? value)>? values2;
+    INatsSerializer? serializer;
+
+    AsyncPublishBatchCommand()
+    {
+    }
+
+    public static AsyncPublishBatchCommand<T> Create(IEnumerable<(NatsKey subject, T? value)> values, INatsSerializer serializer)
+    {
+        if (!TryRent(out var result))
+        {
+            result = new AsyncPublishBatchCommand<T>();
+        }
+
+        result.values1 = values;
+        result.serializer = serializer;
+
+        return result;
+    }
+
+    public static AsyncPublishBatchCommand<T> Create(IEnumerable<(string subject, T? value)> values, INatsSerializer serializer)
+    {
+        if (!TryRent(out var result))
+        {
+            result = new AsyncPublishBatchCommand<T>();
+        }
+
+        result.values2 = values;
+        result.serializer = serializer;
+
+        return result;
+    }
+
+    public override void Write(ProtocolWriter writer)
+    {
+        (this as IBatchCommand).Write(writer);
+    }
+
+
+    int IBatchCommand.Write(ProtocolWriter writer)
+    {
+        var i = 0;
+        if (values1 != null)
+        {
+            foreach (var item in values1)
+            {
+                writer.WritePublish(item.subject, null, item.value, serializer!);
+                i++;
+            }
+        }
+        else if (values2 != null)
+        {
+            foreach (var item in values2)
+            {
+                writer.WritePublish(new NatsKey(item.subject, true), null, item.value, serializer!);
+                i++;
+            }
+        }
+        return i;
+    }
+
+    protected override void Reset()
+    {
+        values1 = default;
+        values2 = default;
+        serializer = null;
+    }
+}
+
+
 // TODO:Async Impl
 internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 {

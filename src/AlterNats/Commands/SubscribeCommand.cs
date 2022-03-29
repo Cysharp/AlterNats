@@ -3,13 +3,14 @@
 internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 {
     NatsKey subject;
+    NatsKey? queueGroup;
     int subscriptionId;
 
     SubscribeCommand()
     {
     }
 
-    public static SubscribeCommand Create(int subscriptionId, in NatsKey subject)
+    public static SubscribeCommand Create(int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
     {
         if (!TryRent(out var result))
         {
@@ -18,19 +19,20 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 
         result.subject = subject;
         result.subscriptionId = subscriptionId;
+        result.queueGroup = queueGroup;
 
         return result;
     }
 
     public override void Write(ProtocolWriter writer)
     {
-        // TODO:QueueGroup?
-        writer.WriteSubscribe(subscriptionId, subject, null);
+        writer.WriteSubscribe(subscriptionId, subject, queueGroup);
     }
 
     protected override void Reset()
     {
         subject = default;
+        queueGroup = default;
         subscriptionId = 0;
     }
 }
@@ -38,13 +40,14 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCommand>
 {
     NatsKey subject;
+    NatsKey? queueGroup;
     int subscriptionId;
 
     AsyncSubscribeCommand()
     {
     }
 
-    public static AsyncSubscribeCommand Create(int subscriptionId, in NatsKey subject)
+    public static AsyncSubscribeCommand Create(int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
     {
         if (!TryRent(out var result))
         {
@@ -53,18 +56,20 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
 
         result.subject = subject;
         result.subscriptionId = subscriptionId;
+        result.queueGroup = queueGroup;
 
         return result;
     }
 
     public override void Write(ProtocolWriter writer)
     {
-        writer.WriteSubscribe(subscriptionId, subject, null);
+        writer.WriteSubscribe(subscriptionId, subject, queueGroup);
     }
 
     protected override void Reset()
     {
         subject = default;
+        queueGroup = default;
         subscriptionId = 0;
     }
 }

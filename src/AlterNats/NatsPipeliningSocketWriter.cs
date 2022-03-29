@@ -52,9 +52,18 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
             {
                 try
                 {
+                    var count = 0;
                     while (bufferWriter.WrittenCount < writerBufferSize && reader.TryRead(out var command))
                     {
-                        command.Write(protocolWriter);
+                        if (command is IBatchCommand batch)
+                        {
+                            count += batch.Write(protocolWriter);
+                        }
+                        else
+                        {
+                            command.Write(protocolWriter);
+                            count++;
+                        }
 
                         if (command is IPromise p)
                         {
@@ -70,12 +79,13 @@ internal sealed class NatsPipeliningSocketWriter : IAsyncDisposable
                     {
                         // SendAsync(ReadOnlyMemory) is very efficient, internally using AwaitableAsyncSocketEventArgs
                         // should use cancellation token?, currently no, wait for flush complete.
+                        // TODO:NO! use CancellationToken!
                         stopwatch.Restart();
                         await socket.SendAsync(bufferWriter.WrittenMemory, SocketFlags.None).ConfigureAwait(false);
                         stopwatch.Stop();
                         if (isEnabledTraceLogging)
                         {
-                            logger.LogTrace("Socket.SendAsync. Size: {0} Elapsed: {1}ms", bufferWriter.WrittenCount, stopwatch.Elapsed.TotalMilliseconds);
+                            logger.LogTrace("Socket.SendAsync. Batch: {0} Size: {1} Elapsed: {2}ms", count, bufferWriter.WrittenCount, stopwatch.Elapsed.TotalMilliseconds);
                         }
 
                         bufferWriter.Reset();

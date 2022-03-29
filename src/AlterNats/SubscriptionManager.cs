@@ -19,37 +19,7 @@ internal sealed class SubscriptionManager : IDisposable
         this.connection = connection;
     }
 
-    // TODO:remove this?(difficult to handle fire-and-forget)
-    public IDisposable Add<T>(string key, Action<T> handler)
-    {
-        lock (gate)
-        {
-            if (byStringKey.TryGetValue(key, out var subscription))
-            {
-                if (subscription.ElementType != typeof(T))
-                {
-                    throw new InvalidOperationException($"Register different type on same key. Key: {key} RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
-                }
-
-                var handlerId = subscription.AddHandler(handler);
-                return new Subscription(subscription, handlerId);
-            }
-            else
-            {
-                var sid = Interlocked.Increment(ref subscriptionId);
-
-                subscription = new RefCountSubscription(this, sid, key, typeof(T));
-                var handlerId = subscription.AddHandler(handler);
-                bySubscriptionId[sid] = subscription;
-                byStringKey[key] = subscription;
-
-                connection.PostSubscribe(sid, key);
-                return new Subscription(subscription, handlerId);
-            }
-        }
-    }
-
-    public async ValueTask<IDisposable> AddAsync<T>(string key, Action<T> handler)
+    public async ValueTask<IDisposable> AddAsync<T>(string key, NatsKey? queueGroup, Action<T> handler)
     {
         int sid;
         RefCountSubscription? subscription;
@@ -81,7 +51,7 @@ internal sealed class SubscriptionManager : IDisposable
         var returnSubscription = new Subscription(subscription, handlerId);
         try
         {
-            await connection.SubscribeAsync(sid, key).ConfigureAwait(false);
+            await connection.SubscribeAsync(sid, key, queueGroup).ConfigureAwait(false);
         }
         catch
         {
@@ -129,7 +99,7 @@ internal sealed class SubscriptionManager : IDisposable
         var returnSubscription = new Subscription(subscription, handlerId);
         try
         {
-            await connection.SubscribeAsync(sid, key).ConfigureAwait(false);
+            await connection.SubscribeAsync(sid, key, null).ConfigureAwait(false);
         }
         catch
         {

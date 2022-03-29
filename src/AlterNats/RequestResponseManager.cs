@@ -26,12 +26,10 @@ internal sealed class RequestResponseManager
 
 
 
-    public ValueTask<TResponse?> AddAsync<TRequest, TResponse>(in NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request)
+    public async ValueTask<TResponse?> AddAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request)
     {
         // TODO:lock...
         var id = Interlocked.Increment(ref requestId);
-
-
 
 
         var command = RequestAsyncCommand<TRequest, TResponse>.Create(key, inBoxPrefix, id, request, connection.Options.Serializer);
@@ -41,7 +39,7 @@ internal sealed class RequestResponseManager
         if (globalSubscription == null)
         {
             var globalSubscribeKey = $"{Encoding.ASCII.GetString(inBoxPrefix.Span)}*";
-            globalSubscription = connection.Subscribe<byte[]>(globalSubscribeKey, _ => { });
+            globalSubscription = await connection.SubscribeAsync<byte[]>(globalSubscribeKey, _ => { });
         }
 
 
@@ -49,9 +47,9 @@ internal sealed class RequestResponseManager
 
         connection.PostCommand(command);
 
-        
 
-        return command.AsValueTask();
+        // TODO:direct return
+        return await command.AsValueTask();
     }
 
 
@@ -59,6 +57,7 @@ internal sealed class RequestResponseManager
 
     public void PublishToResponseHandler(int id, in ReadOnlySequence<byte> buffer)
     {
+        // TODO:lock
         if (responseBoxes.Remove(id, out var box))
         {
             ResponsePublisher.PublishResponse(box.responseType, connection.Options, buffer, box.handler);

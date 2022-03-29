@@ -15,37 +15,68 @@ public class Program
             .AddLogging(x =>
             {
                 x.ClearProviders();
-                x.SetMinimumLevel(LogLevel.Trace);
+                x.SetMinimumLevel(LogLevel.Information);
                 x.AddZLoggerConsole();
             })
             .BuildServiceProvider();
 
         var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
 
-        var connection = new NatsConnection(NatsOptions.Default with
+        var options = NatsOptions.Default with
         {
             LoggerFactory = loggerFactory,
             Serializer = new MessagePackNatsSerializer(),
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
-        });
+        };
 
-        connection.ConnectAsync().AsTask().Wait();
+        var connection1 = new NatsConnection(options);
+        await connection1.ConnectAsync();
 
+        var connection2 = new NatsConnection(options);
+        await connection2.ConnectAsync();
+
+        var connection3 = new NatsConnection(options);
+        await connection3.ConnectAsync();
 
         var key = new NatsKey("foobar");
-
-        Console.WriteLine("GO?");
-
-        var d = await connection.SubscribeRequestAsync<int, int>(key, x => x * 2);
+        var q = new NatsKey("qqq");
 
 
-        var v = await connection.RequestAsync<int, int>(key, 9999);
+        //await connection1.SubscribeAsync(key, q, (int x) =>
+        //{
+        //    Console.WriteLine("ONE:" + x);
+        //});
+
+        //await connection2.SubscribeAsync(key, q, (int x) =>
+        //{
+        //    Console.WriteLine("TWO:" + x);
+        //});
+
+        //for (int i = 0; i < 200; i++)
+        //{
+        //    await connection3.PublishAsync(key, i);
+        //}
 
 
-        Console.WriteLine("RETURN!" + v);
+        await connection1.SubscribeAsync(key.Key, (int x) =>
+        {
+            Console.WriteLine(x);
+        });
+
+        await connection2.PublishBatchAsync(new[]
+        {
+            ("foobar", 100),
+            ("foobar", 101),
+            ("foobar", 102),
+            ("foobar", 103),
+            ("foobar", 104),
+        });
 
 
 
+
+
+        Console.ReadLine();
 
     }
 
@@ -66,27 +97,27 @@ public class Program
     }
 
 
-    static void CalcSubscribe(NatsKey key, NatsConnection connection)
-    {
-        var i = 0;
-        var subscription = connection.Subscribe(key, (MyVector3 x) =>
-        {
-            i++;
+    //static void CalcSubscribe(NatsKey key, NatsConnection connection)
+    //{
+    //    var i = 0;
+    //    var subscription = connection.Subscribe(key, (MyVector3 x) =>
+    //    {
+    //        i++;
 
-            if (i == 2000)
-            {
-                JetBrains.Profiler.Api.MemoryProfiler.ForceGc();
-                JetBrains.Profiler.Api.MemoryProfiler.CollectAllocations(true);
-                JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("Before");
-            }
-            else if (i == 3000)
-            {
-                JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("After");
-                Console.WriteLine("END SNAP");
-            }
-        });
+    //        if (i == 2000)
+    //        {
+    //            JetBrains.Profiler.Api.MemoryProfiler.ForceGc();
+    //            JetBrains.Profiler.Api.MemoryProfiler.CollectAllocations(true);
+    //            JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("Before");
+    //        }
+    //        else if (i == 3000)
+    //        {
+    //            JetBrains.Profiler.Api.MemoryProfiler.GetSnapshot("After");
+    //            Console.WriteLine("END SNAP");
+    //        }
+    //    });
 
-    }
+    //}
 
 
     //static async ValueTask CalcPublishAsync(NatsKey key, NatsConnection connection)

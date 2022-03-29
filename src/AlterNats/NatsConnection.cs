@@ -130,7 +130,32 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(command);
     }
 
-    // TODO:  this API?
+
+
+    public ValueTask PublishBatchAsync<T>(IEnumerable<(NatsKey, T?)> values)
+    {
+        var command = AsyncPublishBatchCommand<T>.Create(values, Options.Serializer);
+        socketWriter.Post(command);
+        return command.AsValueTask();
+    }
+
+    public ValueTask PublishBatchAsync<T>(IEnumerable<(string, T?)> values)
+    {
+        var command = AsyncPublishBatchCommand<T>.Create(values, Options.Serializer);
+        socketWriter.Post(command);
+        return command.AsValueTask();
+    }
+
+
+    public IObservable<T> AsObservable<T>(string key)
+    {
+        return AsObservable<T>(new NatsKey(key, true));
+    }
+
+    public IObservable<T> AsObservable<T>(in NatsKey key)
+    {
+        return new NatsObservable<T>(this, key);
+    }
 
 
     public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
@@ -143,21 +168,21 @@ public class NatsConnection : IAsyncDisposable
         return subscriptionManager.AddRequestHandlerAsync(key.Key, responseHandler);
     }
 
-    // TODO: Remove fire-and-forget subscribe?
-
-    public IDisposable Subscribe<T>(string key, Action<T> handler)
-    {
-        return subscriptionManager.Add(key, handler);
-    }
-
-    public IDisposable Subscribe<T>(NatsKey key, Action<T> handler)
-    {
-        return subscriptionManager.Add(key.Key, handler);
-    }
-
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
     {
-        return subscriptionManager.AddAsync(key, handler);
+        return subscriptionManager.AddAsync(key, null, handler);
+    }
+
+
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key.Key, null, handler);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
+    {
+        return subscriptionManager.AddAsync(key.Key, queueGroup, handler);
     }
 
     // ResponseAsync
@@ -170,14 +195,9 @@ public class NatsConnection : IAsyncDisposable
         socketWriter.Post(PongCommand.Create());
     }
 
-    internal void PostSubscribe(int subscriptionId, string subject)
+    internal ValueTask SubscribeAsync(int subscriptionId, string subject, in NatsKey? queueGroup)
     {
-        socketWriter.Post(SubscribeCommand.Create(subscriptionId, new NatsKey(subject, true)));
-    }
-
-    internal ValueTask SubscribeAsync(int subscriptionId, string subject)
-    {
-        var command = AsyncSubscribeCommand.Create(subscriptionId, new NatsKey(subject, true));
+        var command = AsyncSubscribeCommand.Create(subscriptionId, new NatsKey(subject, true), queueGroup);
         socketWriter.Post(command);
         return command.AsValueTask();
     }
