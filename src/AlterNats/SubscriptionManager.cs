@@ -19,6 +19,15 @@ internal sealed class SubscriptionManager : IDisposable
         this.connection = connection;
     }
 
+    // TODO: for reconnecting
+    public (int subscriptionId, string subject, NatsKey? queueGroup)[] GetExistingSubscriptions()
+    {
+        lock (gate)
+        {
+            return bySubscriptionId.Select(x => (x.Value.SubscriptionId, x.Value.Key, x.Value.QueueGroup)).ToArray();
+        }
+    }
+
     public async ValueTask<IDisposable> AddAsync<T>(string key, NatsKey? queueGroup, Action<T> handler)
     {
         int sid;
@@ -41,7 +50,10 @@ internal sealed class SubscriptionManager : IDisposable
             {
                 sid = Interlocked.Increment(ref subscriptionId);
 
-                subscription = new RefCountSubscription(this, sid, key, typeof(T));
+                subscription = new RefCountSubscription(this, sid, key, typeof(T))
+                {
+                    QueueGroup = queueGroup
+                };
                 handlerId = subscription.AddHandler(handler);
                 bySubscriptionId[sid] = subscription;
                 byStringKey[key] = subscription;
@@ -196,6 +208,7 @@ internal sealed class RefCountSubscription
 
     public int SubscriptionId { get; }
     public string Key { get; }
+    public NatsKey? QueueGroup { get; init; }
     public int ReferenceCount { get; private set; }
     public Type ElementType { get; } // or RequestType
     public Type? ResponseType { get; }

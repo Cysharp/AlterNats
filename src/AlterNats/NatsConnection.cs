@@ -10,7 +10,8 @@ public enum NatsConnectionState
 {
     Closed,
     Open,
-    Connecting
+    Connecting,
+    Reconnecting,
 }
 
 public class NatsConnection : IAsyncDisposable
@@ -23,6 +24,7 @@ public class NatsConnection : IAsyncDisposable
     readonly ILogger<NatsConnection> logger;
 
     TaskCompletionSource waitForConnectSource; // when reconnect, make new source.
+    TaskCompletionSource waitForInfoSource; // when reconnect, make new source.
     internal ReadOnlyMemory<byte> indBoxPrefix;
 
     public NatsOptions Options { get; }
@@ -40,6 +42,7 @@ public class NatsConnection : IAsyncDisposable
         this.Options = options;
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForConnectSource = new TaskCompletionSource();
+        this.waitForInfoSource = new TaskCompletionSource();
         this.indBoxPrefix = Encoding.ASCII.GetBytes($"{options.InboxPrefix}{Guid.NewGuid()}.");
         this.logger = options.LoggerFactory.CreateLogger<NatsConnection>();
 
@@ -53,7 +56,7 @@ public class NatsConnection : IAsyncDisposable
         socket.SendBufferSize = 0;
         socket.ReceiveBufferSize = 0;
 
-        this.socketWriter = new NatsPipeliningSocketWriter(socket, Options);
+        this.socketWriter = new NatsPipeliningSocketWriter(socket, Options); // TODO:reuse writer channel???
         this.socketReader = new NatsReadProtocolProcessor(socket, this);
         this.subscriptionManager = new SubscriptionManager(this);
         this.requestResponseManager = new RequestResponseManager(this);
@@ -64,6 +67,8 @@ public class NatsConnection : IAsyncDisposable
     /// </summary>
     public async ValueTask ConnectAsync()
     {
+        if (this.ConnectionState == NatsConnectionState.Open) return;
+
         this.ConnectionState = NatsConnectionState.Connecting;
         try
         {
@@ -81,7 +86,22 @@ public class NatsConnection : IAsyncDisposable
         await command.AsValueTask();
 
         waitForConnectSource.TrySetResult(); // signal connected to NatsReadProtocolProcessor loop
-        // TODO:wait get INFO?
+
+        // Wait Info receive
+        await waitForInfoSource.Task.ConfigureAwait(false); // TODO:timeout? 
+    }
+
+    public async ValueTask ReconnectAsync()
+    {
+        ConnectionState = NatsConnectionState.Reconnecting;
+
+        throw new NotImplementedException();
+
+    }
+
+    internal void SignalInfo()
+    {
+        waitForInfoSource.SetResult();
     }
 
     // Public APIs

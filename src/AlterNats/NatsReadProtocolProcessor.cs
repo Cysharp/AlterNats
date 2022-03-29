@@ -290,6 +290,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var serverInfo = ParseInfo(newBuffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
+                connection.SignalInfo();
                 return newBuffer.Slice(newBuffer.GetPosition(1, newPosition!.Value));
             }
             else
@@ -297,6 +298,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var serverInfo = ParseInfo(buffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
+                connection.SignalInfo();
                 return buffer.Slice(buffer.GetPosition(1, position.Value));
             }
         }
