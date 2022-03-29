@@ -4,7 +4,7 @@ namespace AlterNats.Commands;
 
 internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 {
-    NatsKey? subject;
+    NatsKey subject;
     T? value;
     INatsSerializer? serializer;
 
@@ -12,23 +12,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
     {
     }
 
-    // TODO:reply-to
-
-    public static PublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
-    {
-        if (!TryRent(out var result))
-        {
-            result = new PublishCommand<T>();
-        }
-
-        result.subject = new NatsKey(subject); // TODO:use specified overload.
-        result.value = value;
-        result.serializer = serializer;
-
-        return result;
-    }
-
-    public static PublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
+    public static PublishCommand<T> Create(in NatsKey subject, T? value, INatsSerializer serializer)
     {
         if (!TryRent(out var result))
         {
@@ -44,12 +28,12 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
     public override void Write(ProtocolWriter writer)
     {
-        writer.WritePublish(subject!, null, value, serializer!);
+        writer.WritePublish(subject, null, value, serializer!);
     }
 
     protected override void Reset()
     {
-        subject = null;
+        subject = default;
         value = default;
         serializer = null;
     }
@@ -57,7 +41,7 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
 
 internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishCommand<T>>
 {
-    NatsKey? subject;
+    NatsKey subject;
     T? value;
     INatsSerializer? serializer;
 
@@ -65,23 +49,7 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
     {
     }
 
-    // TODO:reply-to
-
-    public static AsyncPublishCommand<T> Create(string subject, T? value, INatsSerializer serializer)
-    {
-        if (!TryRent(out var result))
-        {
-            result = new AsyncPublishCommand<T>();
-        }
-
-        result.subject = new NatsKey(subject); // TODO:use specified overload.
-        result.value = value;
-        result.serializer = serializer;
-
-        return result;
-    }
-
-    public static AsyncPublishCommand<T> Create(NatsKey subject, T? value, INatsSerializer serializer)
+    public static AsyncPublishCommand<T> Create(in NatsKey subject, T? value, INatsSerializer serializer)
     {
         if (!TryRent(out var result))
         {
@@ -102,50 +70,30 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
 
     protected override void Reset()
     {
-        subject = null;
+        subject = default;
         value = default;
         serializer = null;
     }
 }
 
-
-
 // TODO:Async Impl
 internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 {
-    string? stringSubject;
-    string? stringReplyTo;
-    NatsKey? encodedSubject;
-    NatsKey? encodedReplyTo;
+    NatsKey subject;
     ReadOnlyMemory<byte> value;
 
     PublishBytesCommand()
     {
     }
 
-    public static PublishBytesCommand Create(string subject, string? replyTo, ReadOnlyMemory<byte> value)
+    public static PublishBytesCommand Create(in NatsKey subject, ReadOnlyMemory<byte> value)
     {
         if (!TryRent(out var result))
         {
             result = new PublishBytesCommand();
         }
 
-        result.stringSubject = subject;
-        result.stringReplyTo = replyTo;
-        result.value = value;
-
-        return result;
-    }
-
-    public static PublishBytesCommand Create(NatsKey subject, NatsKey? replyTo, byte[] value)
-    {
-        if (!TryRent(out var result))
-        {
-            result = new PublishBytesCommand();
-        }
-
-        result.encodedSubject = subject;
-        result.encodedReplyTo = replyTo;
+        result.subject = subject;
         result.value = value;
 
         return result;
@@ -153,22 +101,12 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
 
     public override void Write(ProtocolWriter writer)
     {
-        if (stringSubject != null)
-        {
-            writer.WritePublish(stringSubject, stringReplyTo, value.Span);
-        }
-        else
-        {
-            writer.WritePublish(encodedSubject!, encodedReplyTo, value.Span);
-        }
+        writer.WritePublish(subject, null, value.Span);
     }
 
     protected override void Reset()
     {
-        stringSubject = null;
-        stringReplyTo = null;
-        encodedSubject = null;
-        encodedReplyTo = null;
+        subject = default;
         value = default;
     }
 }

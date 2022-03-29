@@ -5,30 +5,37 @@ using System.Threading.Tasks.Sources;
 namespace AlterNats.Commands;
 
 // similar as AsyncCommandBase
+// SetResult(T) -> ThreadPoolItem.Execute -> continuation.
+
 internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValueTaskSource<TResponse?>, IPromise, IPromise<TResponse>, IThreadPoolWorkItem
 {
+    static int count; // approximately count
     static readonly ConcurrentQueue<RequestAsyncCommand<TRequest, TResponse>> pool = new();
 
-    RequestAsyncCommand<TRequest, TResponse>? nextNode;
-    public ref RequestAsyncCommand<TRequest, TResponse>? NextNode => ref nextNode;
-
     ManualResetValueTaskSourceCore<TResponse?> core;
+    string? stringKey;
+    NatsKey? natsKey;
+    TRequest? request;
     TResponse? response;
-    readonly Action<TResponse> setResultAction;
+    ReadOnlyMemory<byte> inboxPrefix;
+    int id;
 
     RequestAsyncCommand()
     {
-        setResultAction = SetResult;
     }
 
-    public static RequestAsyncCommand<TRequest, TResponse> Create()
+    public static RequestAsyncCommand<TRequest, TResponse> Create(string key, ReadOnlyMemory<byte> inboxPrefix, int id, TRequest request)
     {
         if (!pool.TryDequeue(out var result))
         {
+            Interlocked.Decrement(ref count);
             result = new RequestAsyncCommand<TRequest, TResponse>();
         }
 
-        // TODO:setup field
+        result.stringKey = key;
+        result.inboxPrefix = inboxPrefix;
+        result.id = id;
+        result.request = request;
 
         return result;
     }
@@ -45,7 +52,24 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValu
 
     TResponse? IValueTaskSource<TResponse?>.GetResult(short token)
     {
-        return core.GetResult(token);
+        try
+        {
+            return core.GetResult(token);
+        }
+        finally
+        {
+            core.Reset();
+            request = default;
+            response = default;
+            inboxPrefix = null;
+            id = 0;
+
+            if (count < NatsConnection.MaxCommandCacheSize)
+            {
+                pool.Enqueue(this);
+                Interlocked.Increment(ref count);
+            }
+        }
     }
 
     ValueTaskSourceStatus IValueTaskSource<TResponse?>.GetStatus(short token)
@@ -92,15 +116,9 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : ICommand, IValu
         // writer.WritePublish(
     }
 
-    public Action<TResponse> GetSetResultAction()
-    {
-        return setResultAction;
-    }
-
     public void SetResult(TResponse result)
     {
-
-        // TODO:not yet implemented.
-        throw new NotImplementedException();
+        response = result;
+        ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
     }
 }

@@ -1,5 +1,4 @@
 ﻿using AlterNats.Commands;
-using AlterNats.Internal;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -50,21 +49,14 @@ internal sealed class ResponseBox<T> // TResponse
 
         try
         {
-            if (!options.UseThreadPoolCallback)
+            try
             {
-                try
-                {
-                    ((IPromise<T?>)callback).SetResult(value);
-                }
-                catch (Exception ex)
-                {
-                    options!.LoggerFactory.CreateLogger<MessagePublisher<T>>().LogError(ex, "Error occured during response callback.");
-                }
+                // always run on threadpool.
+                ((IPromise<T?>)callback).SetResult(value);
             }
-            else
+            catch (Exception ex)
             {
-                var item = ThreadPoolWorkItem<T>.Create(((IPromise<T?>)callback).GetSetResultAction(), value);
-                ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
+                options!.LoggerFactory.CreateLogger<MessagePublisher<T>>().LogError(ex, "Error occured during response callback.");
             }
         }
         catch (Exception ex)

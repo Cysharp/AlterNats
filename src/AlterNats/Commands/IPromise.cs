@@ -9,6 +9,5 @@ internal interface IPromise
 
 internal interface IPromise<T> : IPromise
 {
-    Action<T> GetSetResultAction();
     void SetResult(T result);
 }

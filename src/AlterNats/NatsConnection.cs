@@ -93,17 +93,16 @@ public class NatsConnection : IAsyncDisposable
 
     public void Publish<T>(string key, T value)
     {
-        var command = PublishCommand<T>.Create(key, value, Options.Serializer);
-        socketWriter.Post(command);
+        Publish(new NatsKey(key, true), value);
     }
 
-    public void Publish<T>(NatsKey key, T value)
+    public void Publish<T>(in NatsKey key, T value)
     {
         var command = PublishCommand<T>.Create(key, value, Options.Serializer);
         socketWriter.Post(command);
     }
 
-    public ValueTask PublishAsync<T>(NatsKey key, T value)
+    public ValueTask PublishAsync<T>(in NatsKey key, T value)
     {
         var command = AsyncPublishCommand<T>.Create(key, value, Options.Serializer);
         socketWriter.Post(command);
@@ -117,13 +116,12 @@ public class NatsConnection : IAsyncDisposable
 
     public void Publish(string key, byte[] value)
     {
-        var command = PublishBytesCommand.Create(key, null, value);
-        socketWriter.Post(command);
+        Publish(new NatsKey(key, true), value);
     }
 
     public void Publish(NatsKey key, byte[] value)
     {
-        var command = PublishBytesCommand.Create(key, null, value);
+        var command = PublishBytesCommand.Create(key, value);
         socketWriter.Post(command);
     }
 
@@ -175,12 +173,12 @@ public class NatsConnection : IAsyncDisposable
 
     internal void PostSubscribe(int subscriptionId, string subject)
     {
-        socketWriter.Post(SubscribeCommand.Create(subscriptionId, subject));
+        socketWriter.Post(SubscribeCommand.Create(subscriptionId, new NatsKey(subject, true)));
     }
 
     internal ValueTask SubscribeAsync(int subscriptionId, string subject)
     {
-        var command = AsyncSubscribeCommand.Create(subscriptionId, subject);
+        var command = AsyncSubscribeCommand.Create(subscriptionId, new NatsKey(subject, true));
         socketWriter.Post(command);
         return command.AsValueTask();
     }
@@ -250,7 +248,7 @@ public class NatsConnection : IAsyncDisposable
             var array = new PublishBytesCommand[cacheCount];
             for (int i = 0; i < cacheCount; i++)
             {
-                array[i] = PublishBytesCommand.Create((string)null!, default, null!);
+                array[i] = PublishBytesCommand.Create(default, default);
             }
             for (int i = 0; i < cacheCount; i++)
             {
@@ -262,7 +260,7 @@ public class NatsConnection : IAsyncDisposable
             var array = new PublishCommand<T>[cacheCount];
             for (int i = 0; i < cacheCount; i++)
             {
-                array[i] = PublishCommand<T>.Create((NatsKey)null!, default, null!);
+                array[i] = PublishCommand<T>.Create(default, default!, default!);
             }
             for (int i = 0; i < cacheCount; i++)
             {

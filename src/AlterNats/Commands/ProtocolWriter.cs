@@ -49,12 +49,12 @@ internal sealed class ProtocolWriter
     // PUB <subject> [reply-to] <#bytes>\r\n[payload]
     // To omit the payload, set the payload size to 0, but the second CRLF is still required.
 
-    public void WritePublish(NatsKey subject, NatsKey? replyTo, ReadOnlySpan<byte> payload)
+    public void WritePublish(in NatsKey subject, in NatsKey? replyTo, ReadOnlySpan<byte> payload)
     {
         var offset = 0;
         var maxLength = CommandConstants.PubWithPadding.Length
-            + subject.buffer.Length
-            + (replyTo == null ? 0 : replyTo.buffer.Length)
+            + subject.LengthWithSpacePadding
+            + (replyTo == null ? 0 : replyTo.Value.LengthWithSpacePadding)
             + MaxIntStringLength
             + NewLineLength
             + payload.Length
@@ -65,65 +65,35 @@ internal sealed class ProtocolWriter
         CommandConstants.PubWithPadding.CopyTo(writableSpan);
         offset += CommandConstants.PubWithPadding.Length;
 
-        subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
-        offset += subject.buffer.Length;
-
-        if (replyTo != null)
+        if (subject.buffer != null)
         {
-            replyTo.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
-            offset += replyTo.buffer.Length;
+            subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+            offset += subject.buffer.Length;
         }
-
-        if (!Utf8Formatter.TryFormat(payload.Length, writableSpan.Slice(offset), out var written))
+        else
         {
-            throw new Exception(); // TODO: exception
-        }
-        offset += written;
-
-        CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
-        offset += CommandConstants.NewLine.Length;
-
-        if (payload.Length != 0)
-        {
-            payload.CopyTo(writableSpan.Slice(offset));
-            offset += payload.Length;
-        }
-
-        CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
-        offset += CommandConstants.NewLine.Length;
-
-        writer.Advance(offset);
-    }
-
-    public void WritePublish(string subject, string? replyTo, ReadOnlySpan<byte> payload)
-    {
-        var offset = 0;
-        var maxLength = CommandConstants.PubWithPadding.Length
-            + subject.Length + 1
-            + (replyTo == null ? 0 : replyTo.Length + 1)
-            + MaxIntStringLength
-            + NewLineLength
-            + payload.Length
-            + NewLineLength;
-
-        var writableSpan = writer.GetSpan(maxLength);
-
-        CommandConstants.PubWithPadding.CopyTo(writableSpan);
-        offset += CommandConstants.PubWithPadding.Length;
-
-        Encoding.ASCII.GetBytes(subject.AsSpan(), writableSpan.Slice(offset));
-        offset += subject.Length;
-        writableSpan.Slice(offset)[0] = (byte)' ';
-        offset += 1;
-
-        if (replyTo != null)
-        {
-            Encoding.ASCII.GetBytes(replyTo.AsSpan(), writableSpan.Slice(offset));
-            offset += replyTo.Length;
+            Encoding.ASCII.GetBytes(subject.Key.AsSpan(), writableSpan.Slice(offset));
+            offset += subject.Key.Length;
             writableSpan.Slice(offset)[0] = (byte)' ';
             offset += 1;
         }
 
+        if (replyTo != null)
+        {
+            if (replyTo.Value.buffer != null)
+            {
+                replyTo.Value.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+                offset += replyTo.Value.buffer.Length;
+            }
+            else
+            {
+                Encoding.ASCII.GetBytes(replyTo.Value.Key.AsSpan(), writableSpan.Slice(offset));
+                offset += replyTo.Value.Key.Length;
+                writableSpan.Slice(offset)[0] = (byte)' ';
+                offset += 1;
+            }
+        }
+
         if (!Utf8Formatter.TryFormat(payload.Length, writableSpan.Slice(offset), out var written))
         {
             throw new Exception(); // TODO: exception
@@ -145,14 +115,12 @@ internal sealed class ProtocolWriter
         writer.Advance(offset);
     }
 
-    // TODO: string subject, string replyTo
-
-    public void WritePublish<T>(NatsKey subject, NatsKey? replyTo, T? value, INatsSerializer serializer)
+    public void WritePublish<T>(in NatsKey subject, in NatsKey? replyTo, T? value, INatsSerializer serializer)
     {
         var offset = 0;
         var maxLengthWithoutPayload = CommandConstants.PubWithPadding.Length
-            + subject.buffer.Length
-            + (replyTo == null ? 0 : replyTo.buffer.Length)
+            + subject.LengthWithSpacePadding
+            + (replyTo == null ? 0 : replyTo.Value.LengthWithSpacePadding)
             + MaxIntStringLength
             + NewLineLength;
 
@@ -161,13 +129,33 @@ internal sealed class ProtocolWriter
         CommandConstants.PubWithPadding.CopyTo(writableSpan);
         offset += CommandConstants.PubWithPadding.Length;
 
-        subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
-        offset += subject.buffer.Length;
+        if (subject.buffer != null)
+        {
+            subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+            offset += subject.buffer.Length;
+        }
+        else
+        {
+            Encoding.ASCII.GetBytes(subject.Key.AsSpan(), writableSpan.Slice(offset));
+            offset += subject.Key.Length;
+            writableSpan.Slice(offset)[0] = (byte)' ';
+            offset += 1;
+        }
 
         if (replyTo != null)
         {
-            replyTo.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
-            offset += replyTo.buffer.Length;
+            if (replyTo.Value.buffer != null)
+            {
+                replyTo.Value.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+                offset += replyTo.Value.buffer.Length;
+            }
+            else
+            {
+                Encoding.ASCII.GetBytes(replyTo.Value.Key.AsSpan(), writableSpan.Slice(offset));
+                offset += replyTo.Value.Key.Length;
+                writableSpan.Slice(offset)[0] = (byte)' ';
+                offset += 1;
+            }
         }
 
         // Advance for written.
@@ -193,18 +181,13 @@ internal sealed class ProtocolWriter
 
     // https://docs.nats.io/reference/reference-protocols/nats-protocol#sub
     // SUB <subject> [queue group] <sid>
-    public void WriteSubscribe(int subscriptionId, NatsKey subject) => WriteSubscribeCore(subscriptionId, subject, null);
-    public void WriteSubscribe(int subscriptionId, string subject) => WriteSubscribeCore(subscriptionId, subject, null);
-    public void WriteSubscribe(int subscriptionId, NatsKey subject, NatsKey queueGroup) => WriteSubscribeCore(subscriptionId, subject, queueGroup);
-    public void WriteSubscribe(int subscriptionId, string subject, string queueGroup) => WriteSubscribeCore(subscriptionId, subject, queueGroup);
-
-    void WriteSubscribeCore(int sid, NatsKey subject, NatsKey? queueGroup)
+    public void WriteSubscribe(int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
     {
         var offset = 0;
 
         var maxLength = CommandConstants.SubWithPadding.Length
-            + subject.buffer.Length
-            + (queueGroup == null ? 0 : queueGroup.buffer.Length)
+            + subject.LengthWithSpacePadding
+            + (queueGroup == null ? 0 : queueGroup.Value.LengthWithSpacePadding)
             + MaxIntStringLength
             + NewLineLength; // newline
 
@@ -212,55 +195,36 @@ internal sealed class ProtocolWriter
         CommandConstants.SubWithPadding.CopyTo(writableSpan);
         offset += CommandConstants.SubWithPadding.Length;
 
-        subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
-        offset += subject.buffer.Length;
-
-        if (queueGroup != null)
+        if (subject.buffer != null)
         {
-            queueGroup.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
-            offset += queueGroup.buffer.Length;
+            subject.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+            offset += subject.buffer.Length;
         }
-
-        if (!Utf8Formatter.TryFormat(sid, writableSpan.Slice(offset), out var written))
+        else
         {
-            throw new Exception(); // TODO: exception
-        }
-        offset += written;
-
-        CommandConstants.NewLine.CopyTo(writableSpan.Slice(offset));
-        offset += CommandConstants.NewLine.Length;
-
-        writer.Advance(offset);
-    }
-
-    void WriteSubscribeCore(int sid, string subject, string? queueGroup)
-    {
-        var offset = 0;
-
-        var maxLength = CommandConstants.SubWithPadding.Length
-            + subject.Length + 1
-            + (queueGroup == null ? 0 : queueGroup.Length + 1)
-            + MaxIntStringLength
-            + NewLineLength; // newline
-
-        var writableSpan = writer.GetSpan(maxLength);
-        CommandConstants.SubWithPadding.CopyTo(writableSpan);
-        offset += CommandConstants.SubWithPadding.Length;
-
-        Encoding.ASCII.GetBytes(subject.AsSpan(), writableSpan.Slice(offset));
-        offset += subject.Length;
-        writableSpan.Slice(offset)[0] = (byte)' ';
-        offset += 1;
-
-        if (queueGroup != null)
-        {
-            Encoding.ASCII.GetBytes(queueGroup.AsSpan(), writableSpan.Slice(offset));
-            offset += queueGroup.Length;
+            Encoding.ASCII.GetBytes(subject.Key.AsSpan(), writableSpan.Slice(offset));
+            offset += subject.Key.Length;
             writableSpan.Slice(offset)[0] = (byte)' ';
             offset += 1;
         }
 
-        if (!Utf8Formatter.TryFormat(sid, writableSpan.Slice(offset), out var written))
+        if (queueGroup != null)
+        {
+            if (queueGroup.Value.buffer != null)
+            {
+                queueGroup.Value.buffer.AsSpan().CopyTo(writableSpan.Slice(offset));
+                offset += queueGroup.Value.buffer.Length;
+            }
+            else
+            {
+                Encoding.ASCII.GetBytes(queueGroup.Value.Key.AsSpan(), writableSpan.Slice(offset));
+                offset += queueGroup.Value.Key.Length;
+                writableSpan.Slice(offset)[0] = (byte)' ';
+                offset += 1;
+            }
+        }
+
+        if (!Utf8Formatter.TryFormat(subscriptionId, writableSpan.Slice(offset), out var written))
         {
             throw new Exception(); // TODO: exception
         }

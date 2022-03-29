@@ -5,28 +5,33 @@ namespace AlterNats;
 /// <summary>
 /// Represents Subject/QueueGroup of NATS
 /// </summary>
-public sealed class NatsKey : IEquatable<NatsKey>
+public readonly struct NatsKey
 {
     public readonly string Key;
+    internal readonly byte[]? buffer; // subject with space padding.
 
-    readonly int hashCode;
-    internal readonly byte[] buffer; // subject with space padding.
+    internal int LengthWithSpacePadding => Key.Length + 1;
 
     public NatsKey(string key)
+        : this(key, false)
+    {
+    }
+
+    internal NatsKey(string key, bool withoutEncoding)
     {
         this.Key = key;
-        this.hashCode = key.GetHashCode();
-        this.buffer = Encoding.ASCII.GetBytes(key + " ");
+        if (withoutEncoding)
+        {
+            this.buffer = null;
+        }
+        else
+        {
+            this.buffer = Encoding.ASCII.GetBytes(key + " ");
+        }
     }
 
-    public override int GetHashCode()
+    public override string ToString()
     {
-        return hashCode;
-    }
-
-    public bool Equals(NatsKey? other)
-    {
-        if (other == null) return false;
-        return buffer.AsSpan().SequenceEqual(other.buffer);
+        return Key;
     }
 }
