@@ -1,5 +1,4 @@
-﻿using AlterNats.Internal;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Threading.Tasks.Sources;
 
 namespace AlterNats.Commands;

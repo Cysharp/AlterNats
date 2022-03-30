@@ -12,9 +12,9 @@ internal sealed class FixedArrayBufferWriter : ICountableBufferWriter
     public ReadOnlyMemory<byte> WrittenMemory => buffer.AsMemory(0, written);
     public int WrittenCount => written;
 
-    public FixedArrayBufferWriter()
+    public FixedArrayBufferWriter(int capacity = 65535)
     {
-        buffer = new byte[65535];
+        buffer = new byte[capacity];
         written = 0;
     }
 

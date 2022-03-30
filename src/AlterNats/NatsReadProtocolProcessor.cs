@@ -12,36 +12,27 @@ namespace AlterNats;
 
 internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 {
-    readonly Socket socket;
+    readonly PhysicalConnection socket;
     readonly NatsConnection connection;
     readonly SocketReader socketReader;
     readonly Task readLoop;
-    readonly CancellationTokenSource cancellationTokenSource;
+    readonly TaskCompletionSource waitForInfoSignal;
     readonly ILogger<NatsReadProtocolProcessor> logger;
     readonly bool isEnabledTraceLogging;
 
-    public NatsReadProtocolProcessor(Socket socket, NatsConnection connection)
+    public NatsReadProtocolProcessor(PhysicalConnection socket, NatsConnection connection, TaskCompletionSource waitForInfoSignal)
     {
         this.socket = socket;
         this.connection = connection;
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
-        this.cancellationTokenSource = new CancellationTokenSource();
         this.isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
-        this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, connection.Options.LoggerFactory, cancellationTokenSource.Token);
+        this.waitForInfoSignal = waitForInfoSignal;
+        this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, connection.Options.LoggerFactory);
         this.readLoop = Task.Run(ReadLoopAsync);
     }
 
     async Task ReadLoopAsync()
     {
-        try
-        {
-            await connection.WaitForConnect.WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
         while (true)
         {
             try
@@ -166,11 +157,15 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             {
                 return;
             }
+            catch (SocketClosedException e)
+            {
+                waitForInfoSignal.TrySetException(e);
+                return;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error occured during read loop.");
-                // TODO:return? should disconnect socket.
-                return;
+                continue;
             }
         }
     }
@@ -290,7 +285,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var serverInfo = ParseInfo(newBuffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
-                connection.SignalInfo();
+                waitForInfoSignal.TrySetResult();
                 return newBuffer.Slice(newBuffer.GetPosition(1, newPosition!.Value));
             }
             else
@@ -298,7 +293,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var serverInfo = ParseInfo(buffer);
                 connection.ServerInfo = serverInfo;
                 logger.LogInformation("Received ServerInfo: {0}", serverInfo);
-                connection.SignalInfo();
+                waitForInfoSignal.TrySetResult();
                 return buffer.Slice(buffer.GetPosition(1, position.Value));
             }
         }
@@ -400,8 +395,8 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        cancellationTokenSource.Cancel();
-        await readLoop;
+        await readLoop.ConfigureAwait(false); // wait for drain buffer.
+        waitForInfoSignal.TrySetCanceled();
     }
 
     internal static class ServerOpCodes

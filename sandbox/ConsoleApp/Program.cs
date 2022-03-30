@@ -7,6 +7,17 @@ using System.Buffers;
 using System.Text;
 using ZLogger;
 
+[MessagePackObject]
+public class FooRequest
+{
+
+}
+
+[MessagePackObject]
+public class FooResponse
+{
+}
+
 public class Program
 {
     public static async Task Main()
@@ -15,7 +26,7 @@ public class Program
             .AddLogging(x =>
             {
                 x.ClearProviders();
-                x.SetMinimumLevel(LogLevel.Information);
+                x.SetMinimumLevel(LogLevel.Trace);
                 x.AddZLoggerConsole();
             })
             .BuildServiceProvider();
@@ -29,10 +40,23 @@ public class Program
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
         };
 
-        var connection1 = new NatsConnection(options);
-        await connection1.ConnectAsync();
+        var connection = new NatsConnection(options);
+        await connection.ConnectAsync();
 
-        
+
+        // Server
+        await connection.SubscribeRequestAsync<FooRequest, FooResponse>("hogemoge.key", req =>
+        {
+            return new FooResponse();
+        });
+
+        // Client
+        var response = await connection.RequestAsync<FooRequest, FooResponse>("hogemoge.key", new FooRequest());
+
+
+        Console.WriteLine("OK?");
+
+        Console.ReadLine();
 
     }
 

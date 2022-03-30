@@ -6,97 +6,24 @@ using System.Runtime.CompilerServices;
 
 namespace AlterNats.Internal;
 
-#if DEBUG
-
-// for unit-testing.
-
-internal interface ISocket
-{
-    ValueTask<int> ReceiveAsync(Memory<byte> buffer, SocketFlags socketFlags, CancellationToken cancellationToken = default(CancellationToken));
-}
-
-internal sealed class SocketWrapper : ISocket
-{
-    readonly Socket socket;
-
-    public SocketWrapper(Socket socket)
-    {
-        this.socket = socket;
-    }
-
-    public ValueTask<int> ReceiveAsync(Memory<byte> buffer, SocketFlags socketFlags, CancellationToken cancellationToken = default)
-    {
-        return socket.ReceiveAsync(buffer, socketFlags, cancellationToken);
-    }
-}
-
-#endif
-
+// When socket is closed/disposed, operation throws SocketClosedException
 internal sealed class SocketReader
 {
-#if DEBUG
-    ISocket socket;
-#else
-    Socket socket;
-#endif
+    PhysicalConnection socket;
 
     Memory<byte> availableMemory;
-    readonly CancellationToken cancellationToken;
     readonly int minimumBufferSize;
     readonly SeqeunceBuilder seqeunceBuilder = new SeqeunceBuilder();
     readonly Stopwatch stopwatch = new Stopwatch();
     readonly ILogger<SocketReader> logger;
     readonly bool isTraceLogging;
 
-    public SocketReader(Socket socket, int minimumBufferSize, ILoggerFactory loggerFactory, CancellationToken cancellationToken)
-    {
-#if DEBUG
-        this.socket = new SocketWrapper(socket);
-#else
-        this.socket = socket;
-#endif
-        this.minimumBufferSize = minimumBufferSize;
-        this.cancellationToken = cancellationToken;
-        this.logger = loggerFactory.CreateLogger<SocketReader>();
-        this.isTraceLogging = logger.IsEnabled(LogLevel.Trace);
-    }
-
-#if DEBUG
-    internal SocketReader(ISocket socket, int minimumBufferSize, ILoggerFactory loggerFactory, CancellationToken cancellationToken)
+    public SocketReader(PhysicalConnection socket, int minimumBufferSize, ILoggerFactory loggerFactory)
     {
         this.socket = socket;
         this.minimumBufferSize = minimumBufferSize;
-        this.cancellationToken = cancellationToken;
         this.logger = loggerFactory.CreateLogger<SocketReader>();
         this.isTraceLogging = logger.IsEnabled(LogLevel.Trace);
-    }
-#endif
-
-    [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    public async ValueTask<ReadOnlySequence<byte>> ReadAsync()
-    {
-        if (availableMemory.Length == 0)
-        {
-            // rented array is returned from SequenceBuilder.AdvanceTo
-            availableMemory = ArrayPool<byte>.Shared.Rent(minimumBufferSize);
-        }
-
-        stopwatch.Restart();
-        var read = await socket.ReceiveAsync(availableMemory, SocketFlags.None, cancellationToken).ConfigureAwait(false);
-        stopwatch.Stop();
-        if (isTraceLogging)
-        {
-            logger.LogInformation("Socket.ReceiveAsync Size: {0} Elapsed: {1}ms", read, stopwatch.Elapsed.TotalMilliseconds);
-        }
-
-        if (read == 0)
-        {
-            throw new Exception(); // TODO: end of read.
-        }
-
-        seqeunceBuilder.Append(availableMemory.Slice(0, read));
-        availableMemory = availableMemory.Slice(read);
-        return seqeunceBuilder.ToReadOnlySequence();
     }
 
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
@@ -111,16 +38,28 @@ internal sealed class SocketReader
             }
 
             stopwatch.Restart();
-            var read = await socket.ReceiveAsync(availableMemory, SocketFlags.None, cancellationToken).ConfigureAwait(false);
+            int read;
+            try
+            {
+                read = await socket.ReceiveAsync(availableMemory, SocketFlags.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                socket.SignalDisconnected(ex);
+                throw new SocketClosedException(ex);
+            }
+
             stopwatch.Stop();
             if (isTraceLogging)
             {
-                logger.LogInformation("Socket.ReceiveAsync Size: {0} Elapsed: {1}ms", read, stopwatch.Elapsed.TotalMilliseconds);
+                logger.LogTrace("Socket.ReceiveAsync Size: {0} Elapsed: {1}ms", read, stopwatch.Elapsed.TotalMilliseconds);
             }
 
             if (read == 0)
             {
-                throw new Exception(); // TODO: end of read.
+                var ex = new SocketClosedException(null);
+                socket.SignalDisconnected(ex);
+                throw ex;
             }
             totalRead += read;
             seqeunceBuilder.Append(availableMemory.Slice(0, read));
@@ -141,16 +80,28 @@ internal sealed class SocketReader
             }
 
             stopwatch.Restart();
-            var read = await socket.ReceiveAsync(availableMemory, SocketFlags.None, cancellationToken).ConfigureAwait(false);
+            int read;
+            try
+            {
+                read = await socket.ReceiveAsync(availableMemory, SocketFlags.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                socket.SignalDisconnected(ex);
+                throw new SocketClosedException(ex);
+            }
+
             stopwatch.Stop();
             if (isTraceLogging)
             {
-                logger.LogInformation("Socket.ReceiveAsync Size: {0} Elapsed: {1}ms", read, stopwatch.Elapsed.TotalMilliseconds);
+                logger.LogTrace("Socket.ReceiveAsync Size: {0} Elapsed: {1}ms", read, stopwatch.Elapsed.TotalMilliseconds);
             }
 
             if (read == 0)
             {
-                throw new Exception(); // TODO: end of read.
+                var ex = new SocketClosedException(null);
+                socket.SignalDisconnected(ex);
+                throw ex;
             }
 
             var appendMemory = availableMemory.Slice(0, read);
