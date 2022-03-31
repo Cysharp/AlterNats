@@ -73,3 +73,48 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
         subscriptionId = 0;
     }
 }
+
+internal sealed class AsyncSubscribeBatchCommand : AsyncCommandBase<AsyncSubscribeBatchCommand>, IBatchCommand
+{
+    (int subscriptionId, string subject, NatsKey? queueGroup)[]? subscriptions;
+
+    AsyncSubscribeBatchCommand()
+    {
+    }
+
+    public static AsyncSubscribeBatchCommand Create((int subscriptionId, string subject, NatsKey? queueGroup)[] subscriptions)
+    {
+        if (!TryRent(out var result))
+        {
+            result = new AsyncSubscribeBatchCommand();
+        }
+
+        result.subscriptions = subscriptions;
+
+        return result;
+    }
+
+    public override void Write(ProtocolWriter writer)
+    {
+        (this as IBatchCommand).Write(writer);
+    }
+
+    int IBatchCommand.Write(ProtocolWriter writer)
+    {
+        var i = 0;
+        if (subscriptions != null)
+        {
+            foreach (var (id, subject, queue) in subscriptions)
+            {
+                i++;
+                writer.WriteSubscribe(id, new NatsKey(subject, true), queue);
+            }
+        }
+        return i;
+    }
+
+    protected override void Reset()
+    {
+        subscriptions = default;
+    }
+}

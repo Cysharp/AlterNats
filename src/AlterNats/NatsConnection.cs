@@ -54,6 +54,7 @@ public class NatsConnection : IAsyncDisposable
     PhysicalConnection? socket;
     NatsReadProtocolProcessor? socketReader;
     NatsPipeliningWriteProtocolProcessor? socketWriter;
+    TaskCompletionSource waitForOpenConnection;
 
     public NatsOptions Options { get; }
     public NatsConnectionState ConnectionState { get; private set; }
@@ -68,6 +69,7 @@ public class NatsConnection : IAsyncDisposable
     {
         this.Options = options;
         this.ConnectionState = NatsConnectionState.Closed;
+        this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         this.writerState = new WriterState(options);
         this.commandWriter = writerState.CommandBuffer.Writer;
         this.subscriptionManager = new SubscriptionManager(this);
@@ -79,32 +81,51 @@ public class NatsConnection : IAsyncDisposable
     /// <summary>
     /// Connect socket and write CONNECT command to nats server.
     /// </summary>
-    public ValueTask ConnectAsync()
+    public async ValueTask ConnectAsync()
     {
-        if (this.ConnectionState == NatsConnectionState.Open) return default;
-        return InitialConnectAsync();
+        if (this.ConnectionState == NatsConnectionState.Open) return;
+
+        TaskCompletionSource? waiter = null;
+        lock (gate)
+        {
+            ThrowIfDisposed();
+            if (ConnectionState != NatsConnectionState.Closed)
+            {
+                waiter = waitForOpenConnection;
+            }
+            else
+            {
+                ConnectionState = NatsConnectionState.Connecting;
+            }
+        }
+        if (waiter != null)
+        {
+            await waiter.Task.ConfigureAwait(false);
+            return;
+        }
+        else
+        {
+            // Only Closed(initial) state, can run initial connect.
+            await InitialConnectAsync().ConfigureAwait(false);
+        }
     }
 
     async ValueTask InitialConnectAsync()
     {
-        // Only Closed(initial) state, can run.
-        lock (gate)
-        {
-            ThrowIfDisposed();
-            if (ConnectionState != NatsConnectionState.Closed) return;
-            ConnectionState = NatsConnectionState.Connecting;
-        }
-
+        var connectHost = Options.Host;
+        var connectPort = Options.Port;
         try
         {
             // TODO:foreach and retry
+            logger.LogInformation("Try to connect NATS {0}:{1}", connectHost, connectPort);
             var conn = new PhysicalConnection();
-            await conn.ConnectAsync(Options.Host, Options.Port, CancellationToken.None); // TODO:CancellationToken
+            await conn.ConnectAsync(connectHost, connectPort, CancellationToken.None); // TODO:CancellationToken
             this.socket = conn;
         }
-        catch
+        catch (Exception ex)
         {
             this.ConnectionState = NatsConnectionState.Closed;
+            logger.LogError(ex, "Fail to connect NATS {0}:{1}.", connectHost, connectPort);
             throw; // throw for can't connect.
         }
 
@@ -138,73 +159,120 @@ public class NatsConnection : IAsyncDisposable
         }
 
         // After INFO received, reconnect server list has been get.
-        this.ConnectionState = NatsConnectionState.Open;
-        reconnectLoop = Task.Run(ReconnectLoopAsync);
+        lock (gate)
+        {
+            this.ConnectionState = NatsConnectionState.Open;
+            this.waitForOpenConnection.TrySetResult();
+            reconnectLoop = Task.Run(ReconnectLoopAsync);
+        }
     }
 
     async Task ReconnectLoopAsync()
     {
-        //await socket.WaitForClosed.ConfigureAwait(false);
+        // If dispose this client, WaitForClosed throws OpeationCanceledException so stop reconnect-loop correctly.
+        await socket!.WaitForClosed.ConfigureAwait(false);
 
-        //this.ConnectionState = NatsConnectionState.Reconnecting;
+        lock (gate)
+        {
+            this.ConnectionState = NatsConnectionState.Reconnecting;
+            this.waitForOpenConnection.TrySetCanceled();
+            this.waitForOpenConnection = new TaskCompletionSource();
+        }
 
-        //// Cleanup current reader/writer
-        //{
-        //    // reader is not share state, can dispose asynchronously.
-        //    var reader = socketReader;
-        //    _ = Task.Run(async () =>
-        //    {
-        //        try
-        //        {
-        //            await reader.DisposeAsync().ConfigureAwait(false);
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            logger.LogError(ex, "Error occured when disposing socket reader loop.");
-        //        }
-        //    });
+        // Cleanup current reader/writer
+        {
+            // reader is not share state, can dispose asynchronously.
+            var reader = socketReader!;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await reader.DisposeAsync().ConfigureAwait(false);
+                    logger.LogDebug("reader disposed");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error occured when disposing socket reader loop.");
+                }
+            });
 
-        //    // writer's internal buffer/channel is not thread-safe, must wait complete.
-        //    await socketWriter.DisposeAsync();
-        //}
+            // writer's internal buffer/channel is not thread-safe, must wait complete.
+            await socketWriter!.DisposeAsync();
+        }
 
-        //// TODO:when disposed, don't do this.
+        // Dispose current and create new
+        await socket.DisposeAsync();
 
-        //// Dispose current and create new
-        //await socket.DisposeAsync();
+        var urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray() ?? new[] { new NatsUri("nats://" + Options.Host + ":" + Options.Port) };
+        var urlEnumerator = urls.AsEnumerable().GetEnumerator();
+        NatsUri? url = null;
+    CONNECT_AGAIN:
+        try
+        {
+            if (urlEnumerator.MoveNext())
+            {
+                url = urlEnumerator.Current;
+                logger.LogInformation("Try to connect NATS {0}:{1}", url.Host, url.Port);
+                var conn = new PhysicalConnection();
+                await conn.ConnectAsync(url.Host, url.Port, CancellationToken.None); // TODO:CancellationToken
+                this.socket = conn;
+            }
+            else
+            {
+                urlEnumerator = urls.AsEnumerable().GetEnumerator();
+                goto CONNECT_AGAIN;
+            }
 
-        //socket = new PhysicalConnection();
-        //waitForConnectSource = new TaskCompletionSource();
-        //waitForInfoSource = new TaskCompletionSource();
-        //socketReader = new NatsReadProtocolProcessor(socket, this);
-        //socketWriter = new NatsPipeliningSocketWriter(socket, Options);
+            // add CONNECT command to priority lane
+            var connectCommand = AsyncConnectCommand.Create(Options.ConnectOptions);
+            writerState.PriorityCommands.Add(connectCommand);
 
-        //// TODO:try-catch
-        //try
-        //{
-        //    await socket.ConnectAsync(Options.Host, Options.Port, CancellationToken.None); // TODO:CancellationToken?
-        //}
-        //catch (Exception ex)
-        //{
-        //    Console.WriteLine(ex); // TODO:loop
-        //}
+            // Add SUBSCRIBE command to priority lane
+            var subscribeCommand = AsyncSubscribeBatchCommand.Create(subscriptionManager.GetExistingSubscriptions());
+            writerState.PriorityCommands.Add(subscribeCommand);
 
-        //var command = AsyncConnectCommand.Create(Options.ConnectOptions);
-        //commandWriter.TryWrite(command);
-        //await command.AsValueTask();
+            // Run Reader/Writer LOOP start
+            var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState);
+            this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal);
 
-        //this.ConnectionState = NatsConnectionState.Open;
+            await connectCommand.AsValueTask().ConfigureAwait(false);
+            await subscribeCommand.AsValueTask().ConfigureAwait(false);
+            await waitForInfoSignal.Task.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            if (url != null)
+            {
+                logger.LogError(ex, "Fail to connect NATS {0}:{1}.", url.Host, url.Port);
+            }
 
-        //waitForConnectSource.TrySetResult(); // signal connected to NatsReadProtocolProcessor loop
+            if (socketWriter != null)
+            {
+                await socketWriter.DisposeAsync();
+            }
+            if (socketReader != null)
+            {
+                await socketReader.DisposeAsync();
+            }
+            if (socket != null)
+            {
+                await socket.DisposeAsync();
+            }
+            socket = null;
+            socketWriter = null;
+            socketReader = null;
 
-        //// Wait Info receive
-        //await waitForInfoSource.Task.ConfigureAwait(false); // TODO:timeout? 
+            await Task.Delay(TimeSpan.FromMilliseconds(100)); // TODO:retry span option
+            goto CONNECT_AGAIN;
+        }
 
-        //// Resubscribe
-        //// TODO:BatchRequest.
-        //foreach (var item in subscriptionManager.GetExistingSubscriptions())
-        //{
-        //}
+        lock (gate)
+        {
+            this.ConnectionState = NatsConnectionState.Open;
+            this.waitForOpenConnection.TrySetResult();
+            reconnectLoop = Task.Run(ReconnectLoopAsync);
+        }
     }
 
     // Public APIs
@@ -468,11 +536,20 @@ public class NatsConnection : IAsyncDisposable
         if (!isDisposed)
         {
             isDisposed = true;
-            await socketWriter.DisposeAsync().ConfigureAwait(false);
-            await socketReader.DisposeAsync().ConfigureAwait(false);
+            if (socketWriter != null)
+            {
+                await socketWriter.DisposeAsync().ConfigureAwait(false);
+            }
+            if (socketReader != null)
+            {
+                await socketReader.DisposeAsync().ConfigureAwait(false);
+            }
             subscriptionManager.Dispose();
-
-            await socket.DisposeAsync();
+            if (socket != null)
+            {
+                await socket.DisposeAsync();
+            }
+            waitForOpenConnection.TrySetCanceled();
         }
     }
 

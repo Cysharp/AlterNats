@@ -47,6 +47,7 @@ public class Program
         // Server
         await connection.SubscribeRequestAsync<FooRequest, FooResponse>("hogemoge.key", req =>
         {
+            Console.WriteLine("YEAH?");
             return new FooResponse();
         });
 
@@ -54,7 +55,10 @@ public class Program
         var response = await connection.RequestAsync<FooRequest, FooResponse>("hogemoge.key", new FooRequest());
 
 
-        Console.WriteLine("OK?");
+
+        Console.ReadLine();
+
+        var response2 = await connection.RequestAsync<FooRequest, FooResponse>("hogemoge.key", new FooRequest());
 
         Console.ReadLine();
 

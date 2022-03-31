@@ -16,6 +16,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     readonly NatsOptions options;
     readonly Task writeLoop;
     readonly Stopwatch stopwatch = new Stopwatch();
+    readonly CancellationTokenSource cancellationTokenSource;
 
     public NatsPipeliningWriteProtocolProcessor(PhysicalConnection socket, WriterState state)
     {
@@ -24,6 +25,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
         this.bufferWriter = state.BufferWriter;
         this.channel = state.CommandBuffer;
         this.options = state.Options;
+        this.cancellationTokenSource = new CancellationTokenSource();
         this.writeLoop = Task.Run(WriteLoopAsync);
     }
 
@@ -78,11 +80,17 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                         }
                         return; // when socket closed, finish writeloop.
                     }
+
+                    foreach (var item in promiseList)
+                    {
+                        item.SetResult();
+                    }
+                    promiseList.Clear();
                 }
             }
 
             // main writer loop,
-            while ((bufferWriter.WrittenCount != 0) || (await reader.WaitToReadAsync().ConfigureAwait(false)))
+            while ((bufferWriter.WrittenCount != 0) || (await reader.WaitToReadAsync(cancellationTokenSource.Token).ConfigureAwait(false)))
             {
                 try
                 {
@@ -177,6 +185,9 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+        }
         finally
         {
             try
@@ -193,6 +204,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         // TODO:state
+        cancellationTokenSource.Cancel();
         await writeLoop.ConfigureAwait(false); // wait for drain writer
     }
 }
