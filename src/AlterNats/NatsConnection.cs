@@ -536,19 +536,22 @@ public class NatsConnection : IAsyncDisposable
         if (!isDisposed)
         {
             isDisposed = true;
+            // Dispose Writer(Drain prepared queues)
+            // Close Socket
+            // Dispose Reader(Drain read buffers)
             if (socketWriter != null)
             {
                 await socketWriter.DisposeAsync().ConfigureAwait(false);
+            }
+            if (socket != null)
+            {
+                await socket.DisposeAsync();
             }
             if (socketReader != null)
             {
                 await socketReader.DisposeAsync().ConfigureAwait(false);
             }
             subscriptionManager.Dispose();
-            if (socket != null)
-            {
-                await socket.DisposeAsync();
-            }
             waitForOpenConnection.TrySetCanceled();
         }
     }
