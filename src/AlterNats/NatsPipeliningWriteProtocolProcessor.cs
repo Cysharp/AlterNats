@@ -17,6 +17,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     readonly Task writeLoop;
     readonly Stopwatch stopwatch = new Stopwatch();
     readonly CancellationTokenSource cancellationTokenSource;
+    int disposed;
 
     public NatsPipeliningWriteProtocolProcessor(PhysicalConnection socket, WriterState state)
     {
@@ -161,6 +162,9 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                             promise.SetException(ex);
                         }
 
+
+
+
                         socket.SignalDisconnected(ex);
                         return; // when socket closed, finish writeloop.
 
@@ -203,8 +207,11 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        // TODO:state
-        cancellationTokenSource.Cancel();
-        await writeLoop.ConfigureAwait(false); // wait for drain writer
+        if (Interlocked.Increment(ref disposed) == 1)
+        {
+            // TODO:state
+            cancellationTokenSource.Cancel();
+            await writeLoop.ConfigureAwait(false); // wait for drain writer
+        }
     }
 }

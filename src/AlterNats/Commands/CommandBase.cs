@@ -81,7 +81,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IP
         return new ValueTask(this, core.Version);
     }
 
-    public virtual void SetResult()
+    public void SetResult()
     {
         ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
     }
@@ -133,5 +133,107 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IP
     void IThreadPoolWorkItem.Execute()
     {
         core.SetResult(null!);
+    }
+}
+
+internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IValueTaskSource<TResponse>, IPromise, IPromise<TResponse>, IThreadPoolWorkItem
+    where TSelf : class
+{
+    static int count; // approximately count
+    static readonly ConcurrentQueue<TSelf> pool = new();
+
+    internal static int GetCacheCount => count;
+
+    protected static bool TryRent([NotNullWhen(true)] out TSelf? self)
+    {
+        if (pool.TryDequeue(out self!))
+        {
+            Interlocked.Decrement(ref count);
+            return true;
+        }
+        else
+        {
+            self = default;
+            return false;
+        }
+    }
+
+    ManualResetValueTaskSourceCore<TResponse> core;
+    TResponse? response;
+
+    void ICommand.Return()
+    {
+        // don't return manually, only allows from await.
+    }
+
+    public abstract void Write(ProtocolWriter writer);
+
+    protected abstract void Reset();
+
+
+    public ValueTask<TResponse> AsValueTask()
+    {
+        return new ValueTask<TResponse>(this, core.Version);
+    }
+
+    void IPromise.SetResult()
+    {
+        // called when SocketWriter.Flush, however continuation should run on response received.
+    }
+
+    public void SetResult(TResponse result)
+    {
+        response = result;
+        ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
+    }
+
+    public void SetCanceled(CancellationToken cancellationToken)
+    {
+        ThreadPool.UnsafeQueueUserWorkItem(state =>
+        {
+            state.self.core.SetException(new OperationCanceledException(state.cancellationToken));
+        }, (self: this, cancellationToken), preferLocal: false);
+    }
+
+    public void SetException(Exception exception)
+    {
+        ThreadPool.UnsafeQueueUserWorkItem(state =>
+        {
+            state.self.core.SetException(state.exception);
+        }, (self: this, exception), preferLocal: false);
+    }
+
+    TResponse IValueTaskSource<TResponse>.GetResult(short token)
+    {
+        try
+        {
+            return core.GetResult(token);
+        }
+        finally
+        {
+            core.Reset();
+            response = default!;
+            Reset();
+            if (count < NatsConnection.MaxCommandCacheSize)
+            {
+                pool.Enqueue(Unsafe.As<TSelf>(this));
+                Interlocked.Increment(ref count);
+            }
+        }
+    }
+
+    ValueTaskSourceStatus IValueTaskSource<TResponse>.GetStatus(short token)
+    {
+        return core.GetStatus(token);
+    }
+
+    void IValueTaskSource<TResponse>.OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
+    {
+        core.OnCompleted(continuation, state, token, flags);
+    }
+
+    void IThreadPoolWorkItem.Execute()
+    {
+        core.SetResult(response!);
     }
 }
