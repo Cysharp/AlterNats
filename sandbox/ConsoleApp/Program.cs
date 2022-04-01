@@ -56,11 +56,11 @@ public class Program
 
 
 
+        var ttl = await connection.PingAsync();
+        Console.WriteLine("RTT:" + ttl.TotalMilliseconds);
+
         Console.ReadLine();
 
-        var response2 = await connection.RequestAsync<FooRequest, FooResponse>("hogemoge.key", new FooRequest());
-
-        Console.ReadLine();
 
     }
 

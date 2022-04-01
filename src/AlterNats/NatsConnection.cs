@@ -275,6 +275,21 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
+    internal void EnqueuePing(AsyncPingCommand pingCommand)
+    {
+        // Enqueue Ping Command to current working reader.
+        var reader = socketReader;
+        if (reader != null)
+        {
+            if (reader.TryEnqueuePing(pingCommand))
+            {
+                return;
+            }
+        }
+        // Can not add PING, set fail.
+        pingCommand.SetCanceled(CancellationToken.None);
+    }
+
     // Public APIs
     // ***Async or Post***Async(fire-and-forget)
 
@@ -283,11 +298,14 @@ public class NatsConnection : IAsyncDisposable
         commandWriter.TryWrite(PingCommand.Create());
     }
 
-    public ValueTask PingAsync()
+    /// <summary>
+    /// Send PING command and await PONG. Return value is similar as Round trip time.
+    /// </summary>
+    public ValueTask<TimeSpan> PingAsync()
     {
-        var command = AsyncPingCommand.Create();
+        var command = AsyncPingCommand.Create(this);
         commandWriter.TryWrite(command);
-        return command.AsValueTask();
+        return command.AsValueTask(); // TODO:PING Timeout.
     }
 
     public ValueTask PublishAsync<T>(in NatsKey key, T value)
@@ -536,7 +554,7 @@ public class NatsConnection : IAsyncDisposable
         if (!isDisposed)
         {
             isDisposed = true;
-            // Dispose Writer(Drain prepared queues)
+            // Dispose Writer(Drain prepared queues -> write to socket)
             // Close Socket
             // Dispose Reader(Drain read buffers)
             if (socketWriter != null)
@@ -552,6 +570,7 @@ public class NatsConnection : IAsyncDisposable
                 await socketReader.DisposeAsync().ConfigureAwait(false);
             }
             subscriptionManager.Dispose();
+            requestResponseManager.Dispose();
             waitForOpenConnection.TrySetCanceled();
         }
     }
@@ -563,7 +582,7 @@ public class NatsConnection : IAsyncDisposable
 
     // static Cache operations.
 
-    public static int MaxCommandCacheSize { get; set; } = int.MaxValue;
+    public static int MaxCommandCacheSize { get; set; } = 1000; // Default
 
     public static int GetPublishCommandCacheSize<T>(bool async)
     {

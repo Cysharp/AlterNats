@@ -25,27 +25,36 @@ internal sealed class PingCommand : CommandBase<PingCommand>
     }
 }
 
-internal sealed class AsyncPingCommand : AsyncCommandBase<AsyncPingCommand>
+internal sealed class AsyncPingCommand : AsyncCommandBase<AsyncPingCommand, TimeSpan>
 {
+    public DateTimeOffset? WriteTime { get; private set; }
+    NatsConnection? connection;
+
     AsyncPingCommand()
     {
     }
 
-    public static AsyncPingCommand Create()
+    public static AsyncPingCommand Create(NatsConnection connection)
     {
         if (!TryRent(out var result))
         {
             result = new AsyncPingCommand();
         }
+        result.connection = connection;
+
         return result;
     }
 
     protected override void Reset()
     {
+        WriteTime = null;
+        connection = null;
     }
 
     public override void Write(ProtocolWriter writer)
     {
+        WriteTime = DateTimeOffset.UtcNow;
+        connection!.EnqueuePing(this);
         writer.WritePing();
     }
 }

@@ -6,7 +6,7 @@ using System.Text;
 namespace AlterNats;
 
 // TODO:make more...
-internal sealed class RequestResponseManager
+internal sealed class RequestResponseManager : IDisposable
 {
     internal readonly NatsConnection connection;
     readonly object gate = new object();
@@ -53,8 +53,6 @@ internal sealed class RequestResponseManager
     }
 
 
-
-
     public void PublishToResponseHandler(int id, in ReadOnlySequence<byte> buffer)
     {
         // TODO:lock
@@ -63,4 +61,19 @@ internal sealed class RequestResponseManager
             ResponsePublisher.PublishResponse(box.responseType, connection.Options, buffer, box.handler);
         }
     }
+
+    public void Dispose()
+    {
+        // throw new NotImplementedException();
+
+        foreach (var item in responseBoxes)
+        {
+            if (item.Value.handler is IPromise p)
+            {
+                p.SetCanceled(CancellationToken.None);
+            }
+        }
+
+    }
+
 }

@@ -1,7 +1,9 @@
-﻿using AlterNats.Internal;
+﻿using AlterNats.Commands;
+using AlterNats.Internal;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Buffers.Text;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -17,8 +19,10 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     readonly SocketReader socketReader;
     readonly Task readLoop;
     readonly TaskCompletionSource waitForInfoSignal;
+    readonly ConcurrentQueue<AsyncPingCommand> pingCommands; // wait for pong
     readonly ILogger<NatsReadProtocolProcessor> logger;
     readonly bool isEnabledTraceLogging;
+    int disposed;
 
     public NatsReadProtocolProcessor(PhysicalConnection socket, NatsConnection connection, TaskCompletionSource waitForInfoSignal)
     {
@@ -27,8 +31,16 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
         this.isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
         this.waitForInfoSignal = waitForInfoSignal;
+        this.pingCommands = new ConcurrentQueue<AsyncPingCommand>();
         this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, connection.Options.LoggerFactory);
         this.readLoop = Task.Run(ReadLoopAsync);
+    }
+
+    public bool TryEnqueuePing(AsyncPingCommand ping)
+    {
+        if (disposed != 0) return false;
+        pingCommands.Enqueue(ping);
+        return true;
     }
 
     async Task ReadLoopAsync()
@@ -229,6 +241,13 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             const int PongSize = 6; // PONG\r\n
 
+            if (pingCommands.TryDequeue(out var pingCommand))
+            {
+                var start = pingCommand.WriteTime;
+                var elapsed = DateTimeOffset.UtcNow - start;
+                pingCommand.SetResult(elapsed ?? TimeSpan.Zero);
+            }
+
             if (length < PongSize)
             {
                 socketReader.AdvanceTo(buffer.Start);
@@ -395,8 +414,15 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await readLoop.ConfigureAwait(false); // wait for drain buffer.
-        waitForInfoSignal.TrySetCanceled();
+        if (Interlocked.Increment(ref disposed) == 1)
+        {
+            await readLoop.ConfigureAwait(false); // wait for drain buffer.
+            foreach (var item in pingCommands)
+            {
+                item.SetCanceled(CancellationToken.None);
+            }
+            waitForInfoSignal.TrySetCanceled();
+        }
     }
 
     internal static class ServerOpCodes
