@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace AlterNats.Tests;
 
-public class PubSubTest
+public class PubSubTest : IClassFixture<NatsServerFixture>
 {
     [Theory]
     [MemberData(nameof(BasicTestData))]
@@ -47,7 +47,7 @@ public class PubSubTest
             await pubConnection.PublishAsync(natsKey, item);
         }
 
-        var waitResult = autoResetEvent.WaitOne(3000);
+        var waitResult = autoResetEvent.WaitOne(5000);
 
         Assert.True(waitResult, "Timeout");
         Assert.Equal(items.ToArray(), results.ToArray());
@@ -99,7 +99,10 @@ public class PubSubTest
         int? result5 = null;
         int? result6 = null;
 
-        await using var subConnection = new NatsConnection();
+        await using var subConnection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = primaryPort
+        });
 
         await subConnection.ConnectAsync();
 
@@ -139,7 +142,10 @@ public class PubSubTest
             autoResetEvent6.Set();
         });
 
-        await using var pubConnection = new NatsConnection();
+        await using var pubConnection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = primaryPort
+        });
 
         await pubConnection.ConnectAsync();
 
@@ -168,7 +174,7 @@ public class PubSubTest
     {
         var connection1 = new NatsConnection(NatsOptions.Default with
         {
-            Port = 4229
+            Port = 14250
         });
 
         await Assert.ThrowsAsync<SocketException>(async () => await connection1.ConnectAsync());
@@ -176,18 +182,19 @@ public class PubSubTest
 
     static readonly int[] seed1 = { 24, 45, 99, 41, 98, 7, 81, 8, 26, 56 };
 
-    static readonly int[] seed2 = { 86, 21, 30, 64, 97, 24, 58, 51, 12, 57 };
+    static int primaryPort = 14222;
+    static int secondaryPort = 14223;
 
     static object[][] BasicTestData()
     {
         return new[]
         {
-            new object[] { 4222, 4222, seed1 },
-            new object[] { 4222, 4223, seed1 },
-            new object[] { 4223, 4222, seed1 },
-            new object[] { 4223, 4223, seed1 },
-            new object[] { 4222, 4222, seed1.Select(x => $"Test:{x}") },
-            new object[] { 4222, 4222, seed1.Select(x => new SampleClass(x, $"Name{x}")) }
+            new object[] { primaryPort, primaryPort, seed1 },
+            new object[] { primaryPort, secondaryPort, seed1 },
+            new object[] { secondaryPort, primaryPort, seed1 },
+            new object[] { secondaryPort, secondaryPort, seed1 },
+            new object[] { primaryPort, primaryPort, seed1.Select(x => $"Test:{x}") },
+            new object[] { primaryPort, primaryPort, seed1.Select(x => new SampleClass(x, $"Name{x}")) }
         };
     }
 
