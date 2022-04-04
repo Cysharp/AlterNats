@@ -81,44 +81,6 @@ public class PubSubTest
         }
     }
 
-    [Fact]
-    public async Task ConnectionException()
-    {
-        var connection1 = new NatsConnection(NatsOptions.Default with
-        {
-            Port = 4229
-        });
-
-        await Assert.ThrowsAsync<SocketException>(async () => await connection1.ConnectAsync());
-    }
-
-    static readonly int[] seed1 = { 24, 45, 99, 41, 98, 7, 81, 8, 26, 56 };
-    static readonly int[] seed2 = { 86, 21, 30, 64, 97, 24, 58, 51, 12, 57 };
-
-    static object[][] BasicTestData()
-    {
-        return new[]
-        {
-            new object[] { 4222, 4222, seed1 },
-            new object[] { 4222, 4223, seed1 },
-            new object[] { 4223, 4222, seed1 },
-            new object[] { 4223, 4223, seed1 },
-            new object[] { 4222, 4222, seed1.Select(x => $"Test:{x}") },
-            new object[] { 4222, 4222, seed1.Select(x => new SampleClass(x, $"Name{x}")) }
-        };
-    }
-
-    static object?[][] SubjectTestData()
-    {
-        return new[]
-        {
-            new object?[] { "subject", 99, 99, 99, null, null, null },
-            new object?[] { "subject.a", 99, null, null, 99, 99, null },
-            new object?[] { "subject.a.b", 99, null, null, null, 99, null },
-            new object?[] { "other", 99, 99, null, null, null, 99 },
-        };
-    }
-
     [Theory]
     [MemberData(nameof(SubjectTestData))]
     public async Task SubjectTest(string pubKey, int? expect1, int? expect2, int? expect3, int? expect4, int? expect5, int? expect6)
@@ -199,6 +161,45 @@ public class PubSubTest
         Assert.Equal(expect4, result4);
         Assert.Equal(expect5, result5);
         Assert.Equal(expect6, result6);
+    }
+
+    [Fact]
+    public async Task ConnectionException()
+    {
+        var connection1 = new NatsConnection(NatsOptions.Default with
+        {
+            Port = 4229
+        });
+
+        await Assert.ThrowsAsync<SocketException>(async () => await connection1.ConnectAsync());
+    }
+
+    static readonly int[] seed1 = { 24, 45, 99, 41, 98, 7, 81, 8, 26, 56 };
+
+    static readonly int[] seed2 = { 86, 21, 30, 64, 97, 24, 58, 51, 12, 57 };
+
+    static object[][] BasicTestData()
+    {
+        return new[]
+        {
+            new object[] { 4222, 4222, seed1 },
+            new object[] { 4222, 4223, seed1 },
+            new object[] { 4223, 4222, seed1 },
+            new object[] { 4223, 4223, seed1 },
+            new object[] { 4222, 4222, seed1.Select(x => $"Test:{x}") },
+            new object[] { 4222, 4222, seed1.Select(x => new SampleClass(x, $"Name{x}")) }
+        };
+    }
+
+    static object?[][] SubjectTestData()
+    {
+        return new[]
+        {
+            new object?[] { "subject", 99, 99, 99, null, null, null },
+            new object?[] { "subject.a", 99, null, null, 99, 99, null },
+            new object?[] { "subject.a.b", 99, null, null, null, 99, null },
+            new object?[] { "other", 99, 99, null, null, null, 99 },
+        };
     }
 }
 

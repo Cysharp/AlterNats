@@ -21,7 +21,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MicroBenchmark", "sandbox\M
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AlterNats.MessagePack", "src\AlterNats.MessagePack\AlterNats.MessagePack.csproj", "{7B518D4A-93EA-4E5E-956A-CCC34C005AD4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp2", "ConsoleApp2\ConsoleApp2.csproj", "{6994C0A6-DB8B-468A-B311-594BF2488E98}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp2", "sandbox\ConsoleApp2\ConsoleApp2.csproj", "{6994C0A6-DB8B-468A-B311-594BF2488E98}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
