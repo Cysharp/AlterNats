@@ -22,6 +22,6 @@ jobs:
       - uses: actions/setup-dotnet@v1
         with:
           dotnet-version: 6.0.x
-      - run: sudo chmod 755 /home/runner/work/AlterNats/AlterNats/tools/nats-server
+      - run: chmod +x /home/runner/work/AlterNats/AlterNats/tools/nats-server
       - run: dotnet build -c Debug
       - run: dotnet test -c Debug --no-build < /dev/null

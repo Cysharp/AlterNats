@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Cysharp.Diagnostics;
 
 namespace AlterNats.Tests;
 
@@ -207,6 +209,51 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
             new object?[] { "subject.a.b", 99, null, null, null, 99, null },
             new object?[] { "other", 99, 99, null, null, null, 99 },
         };
+    }
+
+    [Fact]
+    public async Task ReConnectionTest()
+    {
+        var cancellationTokenSource1 = new CancellationTokenSource();
+        var cancellationTokenSource2 = new CancellationTokenSource();
+
+        var ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
+
+        ProcessX.StartAsync($"../../../../../tools/nats-server{ext} -p 14225 -cluster nats://localhost:14250 -routes nats://localhost:14248 --cluster_name test-cluster").WaitAsync(cancellationTokenSource1.Token);
+        await Task.Delay(5000);
+
+        await using var connection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = 14225
+        });
+
+        await connection.ConnectAsync();
+
+        var natsKey = new NatsKey(Guid.NewGuid().ToString("N"));
+
+        using var sub = await connection.SubscribeAsync<int>(natsKey, _ => {});
+
+#pragma warning disable CS4014
+        Task.Run(async () =>
+        {
+            while (!cancellationTokenSource2.IsCancellationRequested)
+            {
+                await connection.PublishAsync(natsKey, int.MinValue);
+                await Task.Delay(1000);
+            }
+        });
+#pragma warning restore CS4014
+
+        Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
+        Assert.Equal(14225, connection.ServerInfo.Port);
+
+        cancellationTokenSource1.Cancel();
+        await Task.Delay(5000);
+
+        Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
+        Assert.NotEqual(14225, connection.ServerInfo.Port);
+
+        cancellationTokenSource2.Cancel();
     }
 }
 
