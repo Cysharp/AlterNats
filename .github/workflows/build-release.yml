@@ -27,6 +27,7 @@ jobs:
       - uses: actions/setup-dotnet@v1
         with:
           dotnet-version: 6.0.x
+      - run: sudo chmod +x /home/runner/work/AlterNats/AlterNats/tools/nats-server
       # pack nuget
       - run: dotnet build -c Release -p:Version=${{ env.GIT_TAG }}
       - run: dotnet test -c Release --no-build

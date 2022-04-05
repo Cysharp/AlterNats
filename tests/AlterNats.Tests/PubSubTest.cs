@@ -220,13 +220,29 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         var ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
 
 #pragma warning disable CS4014
-        ProcessX.StartAsync($"../../../../../tools/nats-server{ext} -p 14225 -cluster nats://localhost:14250 -routes nats://localhost:14248 --cluster_name test-cluster").WaitAsync(cancellationTokenSource1.Token);
+        // Start the third nats server
+        ProcessX
+            .StartAsync($"../../../../../tools/nats-server{ext} -p 14224 -cluster nats://localhost:14250 -routes nats://localhost:14248 --cluster_name test-cluster")
+            .WaitAsync(cancellationTokenSource1.Token);
+
+        Task.Run(async () =>
+        {
+            using var client = new TcpClient();
+
+            while (true)
+            {
+                client.Connect("localhost", 14224);
+
+                if (client.Connected) break;
+
+                await Task.Delay(500);
+            }
+        }).Wait(5000);
 #pragma warning restore CS4014
-        await Task.Delay(5000);
 
         await using var connection = new NatsConnection(NatsOptions.Default with
         {
-            Port = 14225
+            Port = 14224
         });
 
         await connection.ConnectAsync();
@@ -248,13 +264,33 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
 
         Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
         Assert.NotNull(connection.ServerInfo);
-        Assert.Equal(14225, connection.ServerInfo!.Port);
+        Assert.Equal(14224, connection.ServerInfo!.Port);
 
+        // Shutdown the third server
         cancellationTokenSource1.Cancel();
-        await Task.Delay(5000);
+
+        // Check for shutdown the third server.
+        Task.Run(async () =>
+        {
+            using var client = new TcpClient();
+
+            while (true)
+            {
+                try
+                {
+                    client.Connect("localhost", 14224);
+                }
+                catch
+                {
+                    break;
+                }
+
+                await Task.Delay(500);
+            }
+        }).Wait(5000);
 
         Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
-        Assert.NotEqual(14225, connection.ServerInfo.Port);
+        Assert.NotEqual(14224, connection.ServerInfo.Port);
 
         cancellationTokenSource2.Cancel();
     }
