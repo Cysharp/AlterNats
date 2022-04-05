@@ -219,7 +219,9 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
 
         var ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
 
+#pragma warning disable CS4014
         ProcessX.StartAsync($"../../../../../tools/nats-server{ext} -p 14225 -cluster nats://localhost:14250 -routes nats://localhost:14248 --cluster_name test-cluster").WaitAsync(cancellationTokenSource1.Token);
+#pragma warning restore CS4014
         await Task.Delay(5000);
 
         await using var connection = new NatsConnection(NatsOptions.Default with
@@ -245,7 +247,8 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
 #pragma warning restore CS4014
 
         Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
-        Assert.Equal(14225, connection.ServerInfo.Port);
+        Assert.NotNull(connection.ServerInfo);
+        Assert.Equal(14225, connection.ServerInfo!.Port);
 
         cancellationTokenSource1.Cancel();
         await Task.Delay(5000);
