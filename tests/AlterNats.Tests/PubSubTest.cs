@@ -1,11 +1,12 @@
-﻿using System;
+﻿using Cysharp.Diagnostics;
+using MessagePack;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Cysharp.Diagnostics;
 
 namespace AlterNats.Tests;
 
@@ -57,6 +58,52 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
 
     [Theory]
     [MemberData(nameof(BasicTestData))]
+    public async Task BasicWithMessagePackSerializer<T>(int subPort, int pubPort, IEnumerable<T> items)
+    {
+        AutoResetEvent autoResetEvent = new AutoResetEvent(false);
+
+        autoResetEvent.Reset();
+        List<T> results = new();
+
+        var natsKey = new NatsKey(Guid.NewGuid().ToString("N"));
+
+        await using var subConnection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = subPort,
+            Serializer = new MessagePackNatsSerializer()
+        });
+
+        await subConnection.ConnectAsync();
+
+        using var d = await subConnection.SubscribeAsync<T>(natsKey, x =>
+        {
+            results.Add(x);
+
+            if (results.Count == items.Count())
+                autoResetEvent.Set();
+        });
+
+        await using var pubConnection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = pubPort,
+            Serializer = new MessagePackNatsSerializer()
+        });
+
+        await pubConnection.ConnectAsync();
+
+        foreach (var item in items)
+        {
+            await pubConnection.PublishAsync(natsKey, item);
+        }
+
+        var waitResult = autoResetEvent.WaitOne(5000);
+
+        Assert.True(waitResult, "Timeout");
+        Assert.Equal(items.ToArray(), results.ToArray());
+    }
+
+    [Theory]
+    [MemberData(nameof(BasicTestData))]
     public async Task BasicRequest<T>(int subPort, int pubPort, IEnumerable<T> items)
     {
         var natsKey = new NatsKey(Guid.NewGuid().ToString("N"));
@@ -73,6 +120,36 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         await using var pubConnection = new NatsConnection(NatsOptions.Default with
         {
             Port = pubPort
+        });
+
+        await pubConnection.ConnectAsync();
+
+        foreach (var item in items)
+        {
+            Assert.Equal($"Re{item}", await pubConnection.RequestAsync<T, string>(natsKey, item));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(BasicTestData))]
+    public async Task BasicRequestWithMessagePackSerializer<T>(int subPort, int pubPort, IEnumerable<T> items)
+    {
+        var natsKey = new NatsKey(Guid.NewGuid().ToString("N"));
+
+        await using var subConnection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = subPort,
+            Serializer = new MessagePackNatsSerializer()
+        });
+
+        await subConnection.ConnectAsync();
+
+        using var d = await subConnection.SubscribeRequestAsync<T, string>(natsKey, x => $"Re{x}");
+
+        await using var pubConnection = new NatsConnection(NatsOptions.Default with
+        {
+            Port = pubPort,
+            Serializer = new MessagePackNatsSerializer()
         });
 
         await pubConnection.ConnectAsync();
@@ -289,6 +366,15 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
             }
         }).Wait(5000);
 
+        // Wait for reconnect
+        Task.Run(async () =>
+        {
+            while (connection.ConnectionState == NatsConnectionState.Reconnecting)
+            {
+                await Task.Delay(500);
+            }
+        }).Wait(5000);
+
         Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
         Assert.NotEqual(14224, connection.ServerInfo.Port);
 
@@ -296,9 +382,12 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
     }
 }
 
+[MessagePackObject]
 public class SampleClass : IEquatable<SampleClass>
 {
+    [Key(0)]
     public int Id { get; set; }
+    [Key(1)]
     public string Name { get; set; }
 
     public SampleClass(int id, string name)

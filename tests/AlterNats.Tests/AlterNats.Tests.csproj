@@ -23,6 +23,7 @@
 		<Using Include="AlterNats" />
 		<Using Include="AlterNats.Internal" />
 		<Using Include="AlterNats.Commands" />
+		<ProjectReference Include="..\..\src\AlterNats.MessagePack\AlterNats.MessagePack.csproj" />
 		<ProjectReference Include="..\..\src\AlterNats\AlterNats.csproj" />
 	</ItemGroup>
 
