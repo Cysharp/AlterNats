@@ -27,10 +27,17 @@ public class NatsServerFixture : IDisposable
 
             while (true)
             {
-                client1.Connect("localhost", 14222);
-                client2.Connect("localhost", 14223);
+                try
+                {
+                    client1.Connect("localhost", 14222);
+                    client2.Connect("localhost", 14223);
 
-                if (client1.Connected && client2.Connected) break;
+                    if (client1.Connected && client2.Connected) break;
+                }
+                catch
+                {
+                    // ignore
+                }
 
                 await Task.Delay(500);
             }

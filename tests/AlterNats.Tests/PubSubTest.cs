@@ -308,9 +308,16 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
 
             while (true)
             {
-                client.Connect("localhost", 14224);
+                try
+                {
+                    client.Connect("localhost", 14224);
 
-                if (client.Connected) break;
+                    if (client.Connected) break;
+                }
+                catch
+                {
+                    // ignore
+                }
 
                 await Task.Delay(500);
             }
