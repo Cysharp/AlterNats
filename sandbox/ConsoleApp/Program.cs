@@ -26,7 +26,7 @@ public class Program
             .AddLogging(x =>
             {
                 x.ClearProviders();
-                x.SetMinimumLevel(LogLevel.Trace);
+                x.SetMinimumLevel(LogLevel.Information);
                 x.AddZLoggerConsole();
             })
             .BuildServiceProvider();
@@ -35,7 +35,8 @@ public class Program
 
         var options = NatsOptions.Default with
         {
-            LoggerFactory = loggerFactory,
+            // LoggerFactory = loggerFactory,
+            LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
         };

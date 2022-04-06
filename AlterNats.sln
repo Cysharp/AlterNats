@@ -25,6 +25,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleApp2", "sandbox\Cons
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{899BE3EA-C5CA-4394-9B62-C45CBFF3AF4E}"
 	ProjectSection(SolutionItems) = preProject
+		.github\workflows\build-debug.yml = .github\workflows\build-debug.yml
+		.github\workflows\build-release.yml = .github\workflows\build-release.yml
 		Directory.Build.props = Directory.Build.props
 	EndProjectSection
 EndProject
