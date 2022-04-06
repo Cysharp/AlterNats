@@ -16,8 +16,8 @@ Console.WriteLine(new { GCSettings.IsServerGC, GCSettings.LatencyMode });
 
 var key = new NatsKey("foo");
 var serializer = new MessagePackNatsSerializer();
-var p = PublishCommand<Vector3>.Create(key, new Vector3(), serializer);
-(p as ICommand).Return();
+//var p = PublishCommand<Vector3>.Create(key, new Vector3(), serializer);
+//(p as ICommand).Return();
 
 try
 {

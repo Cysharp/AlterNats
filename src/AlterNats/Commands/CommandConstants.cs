@@ -1,6 +1,4 @@
-﻿using System.IO.Pipelines;
-
-namespace AlterNats.Commands;
+﻿namespace AlterNats.Commands;
 
 internal static class CommandConstants
 {

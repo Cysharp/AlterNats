@@ -4,6 +4,7 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<IsPackable>false</IsPackable>
+        <NoWarn>$(NoWarn);CS8002</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
