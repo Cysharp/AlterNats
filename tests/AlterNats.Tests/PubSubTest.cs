@@ -288,7 +288,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         };
     }
 
-    [Fact(Skip = "for release.")]
+    [Fact]
     public async Task ReConnectionTest()
     {
         var cancellationTokenSource1 = new CancellationTokenSource();
