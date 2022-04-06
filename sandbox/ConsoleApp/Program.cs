@@ -38,12 +38,23 @@ public class Program
             // LoggerFactory = loggerFactory,
             LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
+            Host = "localhost",
+            Port = 4222,
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
         };
 
         var connection = new NatsConnection(options);
         await connection.ConnectAsync();
 
+
+        
+
+        await connection.PublishAsync("foo", 100);
+
+        await connection.SubscribeAsync<int>("foo", x =>
+        {
+            Console.WriteLine(x);
+        });
 
         // Server
         await connection.SubscribeRequestAsync<FooRequest, FooResponse>("hogemoge.key", req =>
