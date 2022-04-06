@@ -203,6 +203,12 @@ public class NatsConnection : IAsyncDisposable
         // Dispose current and create new
         await socket.DisposeAsync();
 
+        if (Options.NoRandomize)
+        {
+            // TODO: NoRandomize, don't shuffle
+            // TODO: Append current host/port to last, use Distinct
+        }
+
         var urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray() ?? new[] { new NatsUri("nats://" + Options.Host + ":" + Options.Port) };
         var urlEnumerator = urls.AsEnumerable().GetEnumerator();
         NatsUri? url = null;
