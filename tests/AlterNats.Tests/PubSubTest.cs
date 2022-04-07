@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace AlterNats.Tests;
 
-public class PubSubTest : IClassFixture<NatsServerFixture>
+public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 {
     [Theory]
     [MemberData(nameof(BasicTestData))]
@@ -288,12 +288,13 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         };
     }
 
+    CancellationTokenSource cancellationTokenSource = new ();
+
     [Fact]
     public async Task ReConnectionTest()
     {
 #pragma warning disable CS4014
 
-        var cancellationTokenSource1 = new CancellationTokenSource();
         var cancellationTokenSource2 = new CancellationTokenSource();
 
         var ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
@@ -301,7 +302,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         // Start the third nats server
         ProcessX
             .StartAsync($"../../../../../tools/nats-server{ext} -p 14224 -cluster nats://localhost:14250 -routes nats://localhost:14248 --cluster_name test-cluster")
-            .WaitAsync(cancellationTokenSource1.Token);
+            .WaitAsync(cancellationTokenSource.Token);
 
         Task.Run(async () =>
         {
@@ -368,7 +369,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         Assert.Equal(14224, connection.ServerInfo!.Port);
 
         // Shutdown the third server
-        cancellationTokenSource1.Cancel();
+        cancellationTokenSource.Cancel();
 
         // Check for shutdown the third server.
         Task.Run(async () =>
@@ -406,6 +407,11 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         cancellationTokenSource2.Cancel();
 
 #pragma warning restore CS4014
+    }
+
+    public void Dispose()
+    {
+        cancellationTokenSource.Dispose();
     }
 }
 
