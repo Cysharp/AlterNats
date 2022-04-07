@@ -1,0 +1,1 @@
+nats.exe bench foo --pub 1 --sub 1 --size 8 --msgs 10000000
