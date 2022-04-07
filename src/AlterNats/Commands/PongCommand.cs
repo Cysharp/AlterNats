@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class PongCommand : CommandBase<PongCommand>
 {
@@ -6,9 +8,9 @@ internal sealed class PongCommand : CommandBase<PongCommand>
     {
     }
 
-    public static PongCommand Create()
+    public static PongCommand Create(ObjectPool pool)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new PongCommand();
         }

@@ -1,74 +1,55 @@
-﻿using System.Collections.Concurrent;
+﻿using AlterNats.Internal;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks.Sources;
 
 namespace AlterNats.Commands;
 
-internal abstract class CommandBase<TSelf> : ICommand
-    where TSelf : class
+internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
+    where TSelf : class, IObjectPoolNode<TSelf>
 {
-    static int count; // approximately count
-    static readonly ConcurrentQueue<TSelf> pool = new();
-
-    internal static int GetCacheCount => count;
+    TSelf? next;
+    public ref TSelf? NextNode => ref next;
 
     protected abstract void Reset();
 
-    protected static bool TryRent([NotNullWhen(true)] out TSelf? self)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected static bool TryRent(ObjectPool pool, [NotNullWhen(true)] out TSelf? self)
     {
-        if (pool.TryDequeue(out self!))
-        {
-            Interlocked.Decrement(ref count);
-            return true;
-        }
-        else
-        {
-            self = default;
-            return false;
-        }
+        return pool.TryRent<TSelf>(out self!);
     }
 
-    void ICommand.Return()
+    void ICommand.Return(ObjectPool pool)
     {
         Reset();
-        if (count < NatsConnection.MaxCommandCacheSize)
-        {
-            pool.Enqueue(Unsafe.As<TSelf>(this));
-            Interlocked.Increment(ref count);
-        }
+        pool.Return(Unsafe.As<TSelf>(this));
     }
 
     public abstract void Write(ProtocolWriter writer);
 }
 
-internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IPromise, IThreadPoolWorkItem
-    where TSelf : class
+internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>, IValueTaskSource, IPromise, IThreadPoolWorkItem
+    where TSelf : class, IObjectPoolNode<TSelf>
 {
-    static int count; // approximately count
-    static readonly ConcurrentQueue<TSelf> pool = new();
+    TSelf? next;
+    public ref TSelf? NextNode => ref next;
 
-    internal static int GetCacheCount => count;
+    ObjectPool? objectPool;
 
-    protected static bool TryRent([NotNullWhen(true)] out TSelf? self)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected static bool TryRent(ObjectPool pool, [NotNullWhen(true)] out TSelf? self)
     {
-        if (pool.TryDequeue(out self!))
-        {
-            Interlocked.Decrement(ref count);
-            return true;
-        }
-        else
-        {
-            self = default;
-            return false;
-        }
+        return pool.TryRent<TSelf>(out self!);
     }
 
     ManualResetValueTaskSourceCore<object> core;
 
-    void ICommand.Return()
+    void ICommand.Return(ObjectPool pool)
     {
         // don't return manually, only allows from await.
+        // however, set pool on this timing.
+        objectPool = pool;
     }
 
     public abstract void Write(ProtocolWriter writer);
@@ -112,10 +93,11 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IP
         {
             core.Reset();
             Reset();
-            if (count < NatsConnection.MaxCommandCacheSize)
+            var p = objectPool;
+            objectPool = null;
+            if (p != null)
             {
-                pool.Enqueue(Unsafe.As<TSelf>(this));
-                Interlocked.Increment(ref count);
+                p.Return(Unsafe.As<TSelf>(this));
             }
         }
     }
@@ -136,34 +118,27 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IValueTaskSource, IP
     }
 }
 
-internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IValueTaskSource<TResponse>, IPromise, IPromise<TResponse>, IThreadPoolWorkItem
-    where TSelf : class
+internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IObjectPoolNode<TSelf>,  IValueTaskSource<TResponse>, IPromise, IPromise<TResponse>, IThreadPoolWorkItem
+    where TSelf : class, IObjectPoolNode<TSelf>
 {
-    static int count; // approximately count
-    static readonly ConcurrentQueue<TSelf> pool = new();
+    TSelf? next;
+    public ref TSelf? NextNode => ref next;
 
-    internal static int GetCacheCount => count;
-
-    protected static bool TryRent([NotNullWhen(true)] out TSelf? self)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected static bool TryRent(ObjectPool pool, [NotNullWhen(true)] out TSelf? self)
     {
-        if (pool.TryDequeue(out self!))
-        {
-            Interlocked.Decrement(ref count);
-            return true;
-        }
-        else
-        {
-            self = default;
-            return false;
-        }
+        return pool.TryRent<TSelf>(out self!);
     }
 
     ManualResetValueTaskSourceCore<TResponse> core;
     TResponse? response;
+    ObjectPool? objectPool;
 
-    void ICommand.Return()
+    void ICommand.Return(ObjectPool pool)
     {
         // don't return manually, only allows from await.
+        // however, set pool on this timing.
+        objectPool = pool;
     }
 
     public abstract void Write(ProtocolWriter writer);
@@ -214,10 +189,11 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IValueTas
             core.Reset();
             response = default!;
             Reset();
-            if (count < NatsConnection.MaxCommandCacheSize)
+            var p = objectPool;
+            objectPool = null;
+            if (p != null)
             {
-                pool.Enqueue(Unsafe.As<TSelf>(this));
-                Interlocked.Increment(ref count);
+                p.Return(Unsafe.As<TSelf>(this));
             }
         }
     }

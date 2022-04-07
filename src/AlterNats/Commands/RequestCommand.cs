@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class RequestAsyncCommand<TRequest, TResponse> : AsyncCommandBase<RequestAsyncCommand<TRequest, TResponse>, TResponse>
 {
@@ -12,9 +14,9 @@ internal sealed class RequestAsyncCommand<TRequest, TResponse> : AsyncCommandBas
     {
     }
 
-    public static RequestAsyncCommand<TRequest, TResponse> Create(in NatsKey key, ReadOnlyMemory<byte> inboxPrefix, int id, TRequest request, INatsSerializer serializer)
+    public static RequestAsyncCommand<TRequest, TResponse> Create(ObjectPool pool, in NatsKey key, ReadOnlyMemory<byte> inboxPrefix, int id, TRequest request, INatsSerializer serializer)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new RequestAsyncCommand<TRequest, TResponse>();
         }

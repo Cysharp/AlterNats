@@ -11,6 +11,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
 {
     readonly PhysicalConnection socket;
     readonly WriterState state;
+    readonly ObjectPool pool;
     readonly FixedArrayBufferWriter bufferWriter;
     readonly Channel<ICommand> channel;
     readonly NatsOptions options;
@@ -19,10 +20,11 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     readonly CancellationTokenSource cancellationTokenSource;
     int disposed;
 
-    public NatsPipeliningWriteProtocolProcessor(PhysicalConnection socket, WriterState state)
+    public NatsPipeliningWriteProtocolProcessor(PhysicalConnection socket, WriterState state, ObjectPool pool)
     {
         this.socket = socket;
         this.state = state;
+        this.pool = pool;
         this.bufferWriter = state.BufferWriter;
         this.channel = state.CommandBuffer;
         this.options = state.Options;
@@ -56,10 +58,8 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                         {
                             promiseList.Add(p);
                         }
-                        else
-                        {
-                            command.Return();
-                        }
+
+                        command.Return(pool); // Promise does not Return but set ObjectPool here.
                     }
                     state.PriorityCommands.Clear();
 
@@ -112,10 +112,8 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                         {
                             promiseList.Add(p);
                         }
-                        else
-                        {
-                            command.Return();
-                        }
+
+                        command.Return(pool); // Promise does not Return but set ObjectPool here.
                     }
 
                     try

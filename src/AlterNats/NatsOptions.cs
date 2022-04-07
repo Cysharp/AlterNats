@@ -21,8 +21,8 @@ public sealed record NatsOptions
     int MaxPingOut,
     TimeSpan ReconnectWait,
     TimeSpan ReconnectJitter,
-    TimeSpan Timeout
-
+    TimeSpan Timeout, // TODO:Connect Timeout?
+    int CommandPoolSize
 )
 {
     public static NatsOptions Default = new NatsOptions(
@@ -40,6 +40,7 @@ public sealed record NatsOptions
         MaxPingOut: 2,
         ReconnectWait: TimeSpan.FromSeconds(2),
         ReconnectJitter: TimeSpan.FromMilliseconds(100),
-        Timeout: TimeSpan.FromSeconds(2)
+        Timeout: TimeSpan.FromSeconds(2),
+        CommandPoolSize: 256
     );
 }

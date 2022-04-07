@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
 {
@@ -8,9 +10,9 @@ internal sealed class UnsubscribeCommand : CommandBase<UnsubscribeCommand>
     {
     }
 
-    public static UnsubscribeCommand Create(int subscriptionId)
+    public static UnsubscribeCommand Create(ObjectPool pool, int subscriptionId)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new UnsubscribeCommand();
         }

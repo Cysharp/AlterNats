@@ -1,4 +1,5 @@
 ﻿using AlterNats.Commands;
+using AlterNats.Internal;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Text;
@@ -9,6 +10,7 @@ namespace AlterNats;
 internal sealed class RequestResponseManager : IDisposable
 {
     internal readonly NatsConnection connection;
+    readonly ObjectPool pool;
     readonly object gate = new object();
 
     int requestId = 0; // unique id per connection
@@ -19,9 +21,10 @@ internal sealed class RequestResponseManager : IDisposable
     Dictionary<int, (Type responseType, object handler)> responseBoxes = new();
     IDisposable? globalSubscription;
 
-    public RequestResponseManager(NatsConnection connection)
+    public RequestResponseManager(NatsConnection connection, ObjectPool pool)
     {
         this.connection = connection;
+        this.pool = pool;
     }
 
 
@@ -32,7 +35,7 @@ internal sealed class RequestResponseManager : IDisposable
         var id = Interlocked.Increment(ref requestId);
 
 
-        var command = RequestAsyncCommand<TRequest, TResponse>.Create(key, inBoxPrefix, id, request, connection.Options.Serializer);
+        var command = RequestAsyncCommand<TRequest, TResponse>.Create(pool, key, inBoxPrefix, id, request, connection.Options.Serializer);
 
 
         // Subscribe connection wide inbox

@@ -45,6 +45,7 @@ public class NatsConnection : IAsyncDisposable
     readonly SubscriptionManager subscriptionManager;
     readonly RequestResponseManager requestResponseManager;
     readonly ILogger<NatsConnection> logger;
+    readonly ObjectPool pool;
     internal readonly ReadOnlyMemory<byte> indBoxPrefix;
 
     Task? reconnectLoop;
@@ -70,10 +71,11 @@ public class NatsConnection : IAsyncDisposable
         this.Options = options;
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        this.pool = new ObjectPool(options.CommandPoolSize);
         this.writerState = new WriterState(options);
         this.commandWriter = writerState.CommandBuffer.Writer;
         this.subscriptionManager = new SubscriptionManager(this);
-        this.requestResponseManager = new RequestResponseManager(this);
+        this.requestResponseManager = new RequestResponseManager(this, pool);
         this.indBoxPrefix = Encoding.ASCII.GetBytes($"{options.InboxPrefix}{Guid.NewGuid()}.");
         this.logger = options.LoggerFactory.CreateLogger<NatsConnection>();
     }
@@ -132,12 +134,12 @@ public class NatsConnection : IAsyncDisposable
         // Connected completely but still ConnnectionState is Connecting(require after receive INFO).
 
         // add CONNECT command to priority lane
-        var connectCommand = AsyncConnectCommand.Create(Options.ConnectOptions);
+        var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions);
         writerState.PriorityCommands.Add(connectCommand);
 
         // Run Reader/Writer LOOP start
         var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState);
+        this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool);
         this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal);
 
         try
@@ -230,16 +232,16 @@ public class NatsConnection : IAsyncDisposable
             }
 
             // add CONNECT command to priority lane
-            var connectCommand = AsyncConnectCommand.Create(Options.ConnectOptions);
+            var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions);
             writerState.PriorityCommands.Add(connectCommand);
 
             // Add SUBSCRIBE command to priority lane
-            var subscribeCommand = AsyncSubscribeBatchCommand.Create(subscriptionManager.GetExistingSubscriptions());
+            var subscribeCommand = AsyncSubscribeBatchCommand.Create(pool, subscriptionManager.GetExistingSubscriptions());
             writerState.PriorityCommands.Add(subscribeCommand);
 
             // Run Reader/Writer LOOP start
             var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState);
+            this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool);
             this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal);
 
             await connectCommand.AsValueTask().ConfigureAwait(false);
@@ -301,7 +303,7 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPing()
     {
-        commandWriter.TryWrite(PingCommand.Create());
+        commandWriter.TryWrite(PingCommand.Create(pool));
     }
 
     /// <summary>
@@ -309,7 +311,7 @@ public class NatsConnection : IAsyncDisposable
     /// </summary>
     public ValueTask<TimeSpan> PingAsync()
     {
-        var command = AsyncPingCommand.Create(this);
+        var command = AsyncPingCommand.Create(this, pool);
         commandWriter.TryWrite(command);
         return command.AsValueTask(); // TODO:PING Timeout.
     }
@@ -320,7 +322,7 @@ public class NatsConnection : IAsyncDisposable
         {
         }
 
-        var command = AsyncPublishCommand<T>.Create(key, value, Options.Serializer);
+        var command = AsyncPublishCommand<T>.Create(pool, key, value, Options.Serializer);
         commandWriter.TryWrite(command);
         return command.AsValueTask();
     }
@@ -332,7 +334,7 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishAsync(in NatsKey key, byte[] value)
     {
-        var command = AsyncPublishBytesCommand.Create(key, value);
+        var command = AsyncPublishBytesCommand.Create(pool, key, value);
         commandWriter.TryWrite(command);
         return command.AsValueTask();
     }
@@ -344,7 +346,7 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishAsync(in NatsKey key, ReadOnlyMemory<byte> value)
     {
-        var command = AsyncPublishBytesCommand.Create(key, value);
+        var command = AsyncPublishBytesCommand.Create(pool, key, value);
         commandWriter.TryWrite(command);
         return command.AsValueTask();
     }
@@ -356,7 +358,7 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPublish<T>(in NatsKey key, T value)
     {
-        var command = PublishCommand<T>.Create(key, value, Options.Serializer);
+        var command = PublishCommand<T>.Create(pool, key, value, Options.Serializer);
         commandWriter.TryWrite(command);
     }
 
@@ -367,7 +369,7 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPublish(in NatsKey key, byte[] value)
     {
-        var command = PublishBytesCommand.Create(key, value);
+        var command = PublishBytesCommand.Create(pool, key, value);
         commandWriter.TryWrite(command);
     }
 
@@ -378,7 +380,7 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPublish(in NatsKey key, ReadOnlyMemory<byte> value)
     {
-        var command = PublishBytesCommand.Create(key, value);
+        var command = PublishBytesCommand.Create(pool, key, value);
         commandWriter.TryWrite(command);
     }
 
@@ -389,14 +391,14 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishBatchAsync<T>(IEnumerable<(NatsKey, T?)> values)
     {
-        var command = AsyncPublishBatchCommand<T>.Create(values, Options.Serializer);
+        var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
         commandWriter.TryWrite(command);
         return command.AsValueTask();
     }
 
     public ValueTask PublishBatchAsync<T>(IEnumerable<(string, T?)> values)
     {
-        var command = AsyncPublishBatchCommand<T>.Create(values, Options.Serializer);
+        var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
         commandWriter.TryWrite(command);
         return command.AsValueTask();
     }
@@ -515,19 +517,19 @@ public class NatsConnection : IAsyncDisposable
 
     internal void PostPong()
     {
-        commandWriter.TryWrite(PongCommand.Create());
+        commandWriter.TryWrite(PongCommand.Create(pool));
     }
 
     internal ValueTask SubscribeAsync(int subscriptionId, string subject, in NatsKey? queueGroup)
     {
-        var command = AsyncSubscribeCommand.Create(subscriptionId, new NatsKey(subject, true), queueGroup);
+        var command = AsyncSubscribeCommand.Create(pool, subscriptionId, new NatsKey(subject, true), queueGroup);
         commandWriter.TryWrite(command);
         return command.AsValueTask();
     }
 
     internal void PostUnsubscribe(int subscriptionId)
     {
-        commandWriter.TryWrite(UnsubscribeCommand.Create(subscriptionId));
+        commandWriter.TryWrite(UnsubscribeCommand.Create(pool, subscriptionId));
     }
 
     internal void PostCommand(ICommand command)
@@ -584,65 +586,5 @@ public class NatsConnection : IAsyncDisposable
     void ThrowIfDisposed()
     {
         if (isDisposed) throw new ObjectDisposedException(null);
-    }
-
-    // static Cache operations.
-
-    public static int MaxCommandCacheSize { get; set; } = 1000; // Default
-
-    public static int GetPublishCommandCacheSize<T>(bool async)
-    {
-        if (typeof(T) == typeof(byte[]) || typeof(T) == typeof(ReadOnlyMemory<byte>))
-        {
-            if (async)
-            {
-                // TODO:AsyncPublishBytes
-                // return PublishBytesCommand<T>.GetCacheCount;
-                return 0;
-            }
-            else
-            {
-                return PublishBytesCommand.GetCacheCount;
-            }
-        }
-        else
-        {
-            if (async)
-            {
-                return AsyncPublishCommand<T>.GetCacheCount;
-            }
-            else
-            {
-                return PublishCommand<T>.GetCacheCount;
-            }
-        }
-    }
-
-    public static void CachePublishCommand<T>(int cacheCount)
-    {
-        if (typeof(T) == typeof(byte[]) || typeof(T) == typeof(ReadOnlyMemory<byte>))
-        {
-            var array = new PublishBytesCommand[cacheCount];
-            for (int i = 0; i < cacheCount; i++)
-            {
-                array[i] = PublishBytesCommand.Create(default, default);
-            }
-            for (int i = 0; i < cacheCount; i++)
-            {
-                (array[i] as ICommand).Return();
-            }
-        }
-        else
-        {
-            var array = new PublishCommand<T>[cacheCount];
-            for (int i = 0; i < cacheCount; i++)
-            {
-                array[i] = PublishCommand<T>.Create(default, default!, default!);
-            }
-            for (int i = 0; i < cacheCount; i++)
-            {
-                (array[i] as ICommand).Return();
-            }
-        }
     }
 }

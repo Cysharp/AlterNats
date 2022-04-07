@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
 {
@@ -10,9 +12,9 @@ internal sealed class SubscribeCommand : CommandBase<SubscribeCommand>
     {
     }
 
-    public static SubscribeCommand Create(int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
+    public static SubscribeCommand Create(ObjectPool pool, int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new SubscribeCommand();
         }
@@ -47,9 +49,9 @@ internal sealed class AsyncSubscribeCommand : AsyncCommandBase<AsyncSubscribeCom
     {
     }
 
-    public static AsyncSubscribeCommand Create(int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
+    public static AsyncSubscribeCommand Create(ObjectPool pool, int subscriptionId, in NatsKey subject, in NatsKey? queueGroup)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncSubscribeCommand();
         }
@@ -82,9 +84,9 @@ internal sealed class AsyncSubscribeBatchCommand : AsyncCommandBase<AsyncSubscri
     {
     }
 
-    public static AsyncSubscribeBatchCommand Create((int subscriptionId, string subject, NatsKey? queueGroup)[] subscriptions)
+    public static AsyncSubscribeBatchCommand Create(ObjectPool pool, (int subscriptionId, string subject, NatsKey? queueGroup)[] subscriptions)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncSubscribeBatchCommand();
         }

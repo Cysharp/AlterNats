@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks.Sources;
+﻿using AlterNats.Internal;
+using System.Threading.Tasks.Sources;
 
 namespace AlterNats.Commands;
 
@@ -12,9 +13,9 @@ internal sealed class PublishCommand<T> : CommandBase<PublishCommand<T>>
     {
     }
 
-    public static PublishCommand<T> Create(in NatsKey subject, T? value, INatsSerializer serializer)
+    public static PublishCommand<T> Create(ObjectPool pool, in NatsKey subject, T? value, INatsSerializer serializer)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new PublishCommand<T>();
         }
@@ -49,9 +50,9 @@ internal sealed class AsyncPublishCommand<T> : AsyncCommandBase<AsyncPublishComm
     {
     }
 
-    public static AsyncPublishCommand<T> Create(in NatsKey subject, T? value, INatsSerializer serializer)
+    public static AsyncPublishCommand<T> Create(ObjectPool pool, in NatsKey subject, T? value, INatsSerializer serializer)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncPublishCommand<T>();
         }
@@ -86,9 +87,9 @@ internal sealed class AsyncPublishBatchCommand<T> : AsyncCommandBase<AsyncPublis
     {
     }
 
-    public static AsyncPublishBatchCommand<T> Create(IEnumerable<(NatsKey subject, T? value)> values, INatsSerializer serializer)
+    public static AsyncPublishBatchCommand<T> Create(ObjectPool pool, IEnumerable<(NatsKey subject, T? value)> values, INatsSerializer serializer)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncPublishBatchCommand<T>();
         }
@@ -99,9 +100,9 @@ internal sealed class AsyncPublishBatchCommand<T> : AsyncCommandBase<AsyncPublis
         return result;
     }
 
-    public static AsyncPublishBatchCommand<T> Create(IEnumerable<(string subject, T? value)> values, INatsSerializer serializer)
+    public static AsyncPublishBatchCommand<T> Create(ObjectPool pool, IEnumerable<(string subject, T? value)> values, INatsSerializer serializer)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncPublishBatchCommand<T>();
         }
@@ -157,9 +158,9 @@ internal sealed class PublishBytesCommand : CommandBase<PublishBytesCommand>
     {
     }
 
-    public static PublishBytesCommand Create(in NatsKey subject, ReadOnlyMemory<byte> value)
+    public static PublishBytesCommand Create(ObjectPool pool, in NatsKey subject, ReadOnlyMemory<byte> value)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new PublishBytesCommand();
         }
@@ -191,9 +192,9 @@ internal sealed class AsyncPublishBytesCommand : AsyncCommandBase<AsyncPublishBy
     {
     }
 
-    public static AsyncPublishBytesCommand Create(in NatsKey subject, ReadOnlyMemory<byte> value)
+    public static AsyncPublishBytesCommand Create(ObjectPool pool, in NatsKey subject, ReadOnlyMemory<byte> value)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncPublishBytesCommand();
         }

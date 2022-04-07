@@ -472,18 +472,9 @@ namespace NatsBenchmark
 
         void runSuite()
         {
-            // 10000000
-            // NatsConnection.MaxCommandCacheSize = 0;
-            Console.WriteLine("Full Command Cache");
-            NatsConnection.CachePublishCommand<byte[]>(10000000);
-            //NatsConnection.CachePublishCommand<Vector3>(10000000);
-
-            Console.WriteLine("Warmup");
             //RunPubSubAlterNats("AlterNats8b", 10000000, 8, disableShow: true);
             //RunPubSubAlterNatsVector3("AlterNatsV3", 10000000, disableShow: true);
 
-            Console.WriteLine(NatsConnection.GetPublishCommandCacheSize<byte[]>(false));
-            Console.WriteLine(NatsConnection.GetPublishCommandCacheSize<Vector3>(false));
 
             GC.Collect();
             GC.WaitForPendingFinalizers();
@@ -491,7 +482,7 @@ namespace NatsBenchmark
 
             //runPubSubVector3("PubSubVector3", 10000000);
             //runPubSub("PubSubNo", 10000000, 0);
-            runPubSub("PubSub8b", 10000000, 8);
+            //runPubSub("PubSub8b", 10000000, 8);
             //runPubSub("PubSub32b", 10000000, 32);
             //runPubSub("PubSub100b", 10000000, 100);
             //runPubSub("PubSub256b", 10000000, 256);

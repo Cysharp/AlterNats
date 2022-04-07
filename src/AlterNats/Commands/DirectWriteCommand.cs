@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class DirectWriteCommand : ICommand
 {
@@ -9,7 +11,7 @@ internal sealed class DirectWriteCommand : ICommand
         this.protocol = protocol;
     }
 
-    public void Return()
+    public void Return(ObjectPool pool)
     {
     }
 

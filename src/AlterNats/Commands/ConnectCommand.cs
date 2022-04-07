@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class AsyncConnectCommand : AsyncCommandBase<AsyncConnectCommand>
 {
@@ -8,9 +10,9 @@ internal sealed class AsyncConnectCommand : AsyncCommandBase<AsyncConnectCommand
     {
     }
 
-    public static AsyncConnectCommand Create(ConnectOptions connectOptions)
+    public static AsyncConnectCommand Create(ObjectPool pool, ConnectOptions connectOptions)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncConnectCommand();
         }

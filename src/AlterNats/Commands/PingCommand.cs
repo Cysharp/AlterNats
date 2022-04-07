@@ -1,4 +1,6 @@
-﻿namespace AlterNats.Commands;
+﻿using AlterNats.Internal;
+
+namespace AlterNats.Commands;
 
 internal sealed class PingCommand : CommandBase<PingCommand>
 {
@@ -6,9 +8,9 @@ internal sealed class PingCommand : CommandBase<PingCommand>
     {
     }
 
-    public static PingCommand Create()
+    public static PingCommand Create(ObjectPool pool)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new PingCommand();
         }
@@ -34,9 +36,9 @@ internal sealed class AsyncPingCommand : AsyncCommandBase<AsyncPingCommand, Time
     {
     }
 
-    public static AsyncPingCommand Create(NatsConnection connection)
+    public static AsyncPingCommand Create(NatsConnection connection, ObjectPool pool)
     {
-        if (!TryRent(out var result))
+        if (!TryRent(pool, out var result))
         {
             result = new AsyncPingCommand();
         }

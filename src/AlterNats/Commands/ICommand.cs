@@ -1,12 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using AlterNats.Internal;
+using Microsoft.Extensions.Logging;
 
 namespace AlterNats.Commands;
 
-// https://docs.nats.io/reference/reference-protocols/nats-protocol
-
 internal interface ICommand
 {
-    void Return();
+    void Return(ObjectPool pool);
     void Write(ProtocolWriter writer);
 }
 
