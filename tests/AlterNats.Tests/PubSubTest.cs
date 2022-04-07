@@ -291,12 +291,13 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
     [Fact]
     public async Task ReConnectionTest()
     {
+#pragma warning disable CS4014
+
         var cancellationTokenSource1 = new CancellationTokenSource();
         var cancellationTokenSource2 = new CancellationTokenSource();
 
         var ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
 
-#pragma warning disable CS4014
         // Start the third nats server
         ProcessX
             .StartAsync($"../../../../../tools/nats-server{ext} -p 14224 -cluster nats://localhost:14250 -routes nats://localhost:14248 --cluster_name test-cluster")
@@ -322,20 +323,37 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
                 await Task.Delay(500);
             }
         }).Wait(5000);
-#pragma warning restore CS4014
 
-        await using var connection = new NatsConnection(NatsOptions.Default with
+        var connection = new NatsConnection(NatsOptions.Default with
         {
             Port = 14224
         });
 
-        await connection.ConnectAsync();
+        // Wait for start clustering.
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                await connection.ConnectAsync();
+
+                if (connection.ServerInfo?.ClientConnectUrls != null) break;
+
+                connection = new NatsConnection(NatsOptions.Default with
+                {
+                    Port = 14224
+                });
+
+                await Task.Delay(500);
+            }
+        }).Wait(5000);
+
+        // If the third server can not start clustering, test failed
+        Assert.NotNull(connection.ServerInfo?.ClientConnectUrls);
 
         var natsKey = new NatsKey(Guid.NewGuid().ToString("N"));
 
         using var sub = await connection.SubscribeAsync<int>(natsKey, _ => {});
 
-#pragma warning disable CS4014
         Task.Run(async () =>
         {
             while (!cancellationTokenSource2.IsCancellationRequested)
@@ -344,7 +362,6 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
                 await Task.Delay(1000);
             }
         });
-#pragma warning restore CS4014
 
         Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
         Assert.NotNull(connection.ServerInfo);
@@ -376,7 +393,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         // Wait for reconnect
         Task.Run(async () =>
         {
-            while (connection.ConnectionState == NatsConnectionState.Reconnecting)
+            while (connection.ConnectionState != NatsConnectionState.Open )
             {
                 await Task.Delay(500);
             }
@@ -385,7 +402,10 @@ public class PubSubTest : IClassFixture<NatsServerFixture>
         Assert.Equal(NatsConnectionState.Open, connection.ConnectionState);
         Assert.NotEqual(14224, connection.ServerInfo.Port);
 
+        await connection.DisposeAsync();
         cancellationTokenSource2.Cancel();
+
+#pragma warning restore CS4014
     }
 }
 
