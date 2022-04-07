@@ -114,21 +114,27 @@ public class NatsConnection : IAsyncDisposable
 
     async ValueTask InitialConnectAsync()
     {
-        var connectHost = Options.Host;
-        var connectPort = Options.Port;
-        try
+        var uris = Options.GetSeedUris();
+        foreach (var uri in uris)
         {
-            // TODO:foreach and retry
-            logger.LogInformation("Try to connect NATS {0}:{1}", connectHost, connectPort);
-            var conn = new PhysicalConnection();
-            await conn.ConnectAsync(connectHost, connectPort, CancellationToken.None); // TODO:CancellationToken
-            this.socket = conn;
+            try
+            {
+                logger.LogInformation("Try to connect NATS {0}:{1}", uri.Host, uri.Port);
+                var conn = new PhysicalConnection();
+                await conn.ConnectAsync(uri.Host, uri.Port, CancellationToken.None); // TODO:CancellationToken
+                this.socket = conn;
+                break;
+            }
+            catch (Exception ex)
+            {
+                this.ConnectionState = NatsConnectionState.Closed;
+                logger.LogError(ex, "Fail to connect NATS {0}:{1}.", uri.Host, uri.Port);
+            }
         }
-        catch (Exception ex)
+        if (this.socket == null)
         {
-            this.ConnectionState = NatsConnectionState.Closed;
-            logger.LogError(ex, "Fail to connect NATS {0}:{1}.", connectHost, connectPort);
-            throw; // throw for can't connect.
+            // TODO:require to retry initial connect???
+            throw new Exception("can not connect uris: " + String.Join(",", uris.Select(x => x.ToString()))); // TODO:throw other Exception
         }
 
         // Connected completely but still ConnnectionState is Connecting(require after receive INFO).
@@ -211,7 +217,7 @@ public class NatsConnection : IAsyncDisposable
             // TODO: Append current host/port to last, use Distinct
         }
 
-        var urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray() ?? new[] { new NatsUri("nats://" + Options.Host + ":" + Options.Port) };
+        var urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray() ?? new[] { new NatsUri(Options.Url) };
         var urlEnumerator = urls.AsEnumerable().GetEnumerator();
         NatsUri? url = null;
     CONNECT_AGAIN:

@@ -6,7 +6,7 @@ var natsKey2 = new NatsKey("subject2");
 
 await using var subConnection1 = new NatsConnection(NatsOptions.Default with
 {
-    Port = 4222
+    Url = "localhost:4222"
 });
 await subConnection1.ConnectAsync();
 
@@ -22,7 +22,7 @@ using var d1n = await subConnection1.SubscribeAsync<int>(natsKey2, x =>
 
 await using var subConnection2 = new NatsConnection(NatsOptions.Default with
 {
-    Port = 4223
+    Url = "localhost:4222"
 });
 
 await subConnection2.ConnectAsync();
@@ -43,14 +43,14 @@ Task.Run(async () =>
 {
     await using var pubConnection1 = new NatsConnection(NatsOptions.Default with
     {
-        Port = 4222
+        Url = "localhost:4222"
     });
 
     await pubConnection1.ConnectAsync();
 
     await using var pubConnection2 = new NatsConnection(NatsOptions.Default with
     {
-        Port = 4222
+        Url = "localhost:4222"
     });
 
     await pubConnection2.ConnectAsync();

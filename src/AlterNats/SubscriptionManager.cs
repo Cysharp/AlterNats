@@ -19,7 +19,6 @@ internal sealed class SubscriptionManager : IDisposable
         this.connection = connection;
     }
 
-    // TODO: for reconnecting
     public (int subscriptionId, string subject, NatsKey? queueGroup)[] GetExistingSubscriptions()
     {
         lock (gate)

@@ -38,8 +38,6 @@ public class Program
             // LoggerFactory = loggerFactory,
             LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
-            Host = "localhost",
-            Port = 4222,
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
         };
 

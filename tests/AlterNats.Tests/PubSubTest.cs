@@ -25,7 +25,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var subConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = subPort
+            Url = "localhost:" + subPort
         });
 
         await subConnection.ConnectAsync();
@@ -40,7 +40,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var pubConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = pubPort
+            Url = "localhost:" + pubPort
         });
 
         await pubConnection.ConnectAsync();
@@ -69,7 +69,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var subConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = subPort,
+            Url = "localhost:" + subPort,
             Serializer = new MessagePackNatsSerializer()
         });
 
@@ -85,7 +85,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var pubConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = pubPort,
+            Url = "localhost:" + pubPort,
             Serializer = new MessagePackNatsSerializer()
         });
 
@@ -110,7 +110,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var subConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = subPort
+            Url = "localhost:" + subPort
         });
 
         await subConnection.ConnectAsync();
@@ -119,7 +119,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var pubConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = pubPort
+            Url = "localhost:" + pubPort
         });
 
         await pubConnection.ConnectAsync();
@@ -138,7 +138,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var subConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = subPort,
+            Url = "localhost:" + subPort,
             Serializer = new MessagePackNatsSerializer()
         });
 
@@ -148,7 +148,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var pubConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = pubPort,
+            Url = "localhost:" + pubPort,
             Serializer = new MessagePackNatsSerializer()
         });
 
@@ -180,7 +180,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var subConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = primaryPort
+            Url = "localhost:" + primaryPort,
         });
 
         await subConnection.ConnectAsync();
@@ -223,7 +223,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         await using var pubConnection = new NatsConnection(NatsOptions.Default with
         {
-            Port = primaryPort
+            Url = "localhost:" + primaryPort,
         });
 
         await pubConnection.ConnectAsync();
@@ -253,10 +253,10 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
     {
         var connection1 = new NatsConnection(NatsOptions.Default with
         {
-            Port = 14250
+            Url = "localhost:" + 14250,
         });
 
-        await Assert.ThrowsAsync<SocketException>(async () => await connection1.ConnectAsync());
+        await Assert.ThrowsAsync<Exception>(async () => await connection1.ConnectAsync());
     }
 
     static readonly int[] seed1 = { 24, 45, 99, 41, 98, 7, 81, 8, 26, 56 };
@@ -327,7 +327,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         var connection = new NatsConnection(NatsOptions.Default with
         {
-            Port = 14224
+            Url = "localhost:" + 14224,
         });
 
         // Wait for start clustering.
@@ -341,7 +341,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
                 connection = new NatsConnection(NatsOptions.Default with
                 {
-                    Port = 14224
+                    Url = "localhost:" + 14224,
                 });
 
                 await Task.Delay(500);

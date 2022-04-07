@@ -3,7 +3,7 @@
 internal sealed class NatsUri : IEquatable<NatsUri>
 {
     const string DefaultScheme = "nats://";
-    public static readonly NatsUri Default = new NatsUri("localhost:4222");
+    public static readonly NatsUri Default = new NatsUri("nats://localhost:4222");
     public const int DefaultPort = 4222;
 
     readonly Uri uri;

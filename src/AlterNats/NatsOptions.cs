@@ -7,8 +7,7 @@ namespace AlterNats;
 
 public sealed record NatsOptions
 (
-    string Host,
-    int Port,
+    string Url,
     ConnectOptions ConnectOptions,
     INatsSerializer Serializer,
     ILoggerFactory LoggerFactory,
@@ -26,8 +25,7 @@ public sealed record NatsOptions
 )
 {
     public static NatsOptions Default = new NatsOptions(
-        Host: "localhost",
-        Port: 4222,
+        Url: "nats://localhost:4222",
         ConnectOptions: ConnectOptions.Default,
         Serializer: new JsonNatsSerializer(new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),
         LoggerFactory: NullLoggerFactory.Instance,
@@ -43,4 +41,17 @@ public sealed record NatsOptions
         Timeout: TimeSpan.FromSeconds(2),
         CommandPoolSize: 256
     );
+
+    internal NatsUri[] GetSeedUris()
+    {
+        var urls = Url.Split(',');
+        if (NoRandomize)
+        {
+            return urls.Select(x => new NatsUri(x)).ToArray();
+        }
+        else
+        {
+            return urls.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray();
+        }
+    }
 }

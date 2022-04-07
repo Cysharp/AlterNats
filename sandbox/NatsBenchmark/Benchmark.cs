@@ -270,7 +270,6 @@ namespace NatsBenchmark
             return ticks / TimeSpan.TicksPerMillisecond * 1000.0;
         }
 
-        // TODO:  look into warming up the server, this client for accuracy.
         void runPubSubLatency(string testName, long testCount, long testSize)
         {
             object subcriberLock = new object();
@@ -340,7 +339,6 @@ namespace NatsBenchmark
                 )
             );
 
-            // TODO:  fix accuracy - trim out outliers, etc.
             Console.WriteLine(
                 "{0} (us)\t{1} msgs, {2:F2} avg, {3:F2} min, {4:F2} max, {5:F2} stddev",
                 testName,

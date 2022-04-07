@@ -281,7 +281,6 @@ namespace NatsBenchmark
             pubConn.ConnectAsync().AsTask().Wait();
             subConn.ConnectAsync().AsTask().Wait();
 
-            // TODO:Async Subscribe
             var d = subConn.SubscribeAsync<Vector3>(key.Key, _ =>
             {
                 Interlocked.Increment(ref subCount);

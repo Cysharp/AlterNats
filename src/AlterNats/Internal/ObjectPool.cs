@@ -52,7 +52,7 @@ internal sealed class ObjectPool
         {
             if (poolNodes.Length <= id)
             {
-                Array.Resize(ref poolNodes, poolNodes.Length * 2);
+                Array.Resize(ref poolNodes, Math.Max(poolNodes.Length * 2, id + 1));
                 poolNodes[id] = new ObjectPool<T>(poolLimit);
             }
             else if (poolNodes[id] == null)
@@ -101,6 +101,8 @@ internal sealed class ObjectPool<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryPop([NotNullWhen(true)] out T? result)
     {
+        // Instead of lock, use CompareExchange gate.
+        // In a worst case, missed cached object(create new one) but it's not a big deal.
         if (Interlocked.CompareExchange(ref gate, 1, 0) == 0)
         {
             var v = root;
