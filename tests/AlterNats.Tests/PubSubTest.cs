@@ -1,4 +1,4 @@
-﻿using Cysharp.Diagnostics;
+using Cysharp.Diagnostics;
 using MessagePack;
 using System;
 using System.Collections.Generic;
@@ -7,11 +7,19 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit.Abstractions;
 
 namespace AlterNats.Tests;
 
 public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 {
+    readonly ITestOutputHelper output;
+
+    public PubSubTest(ITestOutputHelper output)
+    {
+        this.output = output;
+    }
+
     [Theory]
     [MemberData(nameof(BasicTestData))]
     public async Task Basic<T>(int subPort, int pubPort, IEnumerable<T> items)
@@ -288,7 +296,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
         };
     }
 
-    CancellationTokenSource cancellationTokenSource = new ();
+    CancellationTokenSource cancellationTokenSource = new();
 
     [Fact]
     public async Task ReConnectionTest()
@@ -327,6 +335,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
         var connection = new NatsConnection(NatsOptions.Default with
         {
+            LoggerFactory = new OutputHelperLoggerFactory(output),
             Url = "localhost:" + 14224,
         });
 
@@ -341,6 +350,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
 
                 connection = new NatsConnection(NatsOptions.Default with
                 {
+                    LoggerFactory = new OutputHelperLoggerFactory(output),
                     Url = "localhost:" + 14224,
                 });
 

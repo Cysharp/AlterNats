@@ -53,6 +53,7 @@ public class NatsConnection : IAsyncDisposable
 
     // when reconnect, make new instance.
     PhysicalConnection? socket;
+    NatsUri? currentConnectUri;
     NatsReadProtocolProcessor? socketReader;
     NatsPipeliningWriteProtocolProcessor? socketWriter;
     TaskCompletionSource waitForOpenConnection;
@@ -121,8 +122,9 @@ public class NatsConnection : IAsyncDisposable
             {
                 logger.LogInformation("Try to connect NATS {0}:{1}", uri.Host, uri.Port);
                 var conn = new PhysicalConnection();
-                await conn.ConnectAsync(uri.Host, uri.Port, CancellationToken.None); // TODO:CancellationToken
+                await conn.ConnectAsync(uri.Host, uri.Port, CancellationToken.None); // TODO:CancellationToken, Timeout
                 this.socket = conn;
+                this.currentConnectUri = uri;
                 break;
             }
             catch (Exception ex)
@@ -211,13 +213,23 @@ public class NatsConnection : IAsyncDisposable
         // Dispose current and create new
         await socket.DisposeAsync();
 
+        NatsUri[] urls = Array.Empty<NatsUri>();
         if (Options.NoRandomize)
         {
-            // TODO: NoRandomize, don't shuffle
-            // TODO: Append current host/port to last, use Distinct
+            urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).Distinct().ToArray() ?? Options.GetSeedUris();
+        }
+        else
+        {
+            urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).Distinct().ToArray() ?? Options.GetSeedUris();
         }
 
-        var urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray() ?? new[] { new NatsUri(Options.Url) };
+        if (this.currentConnectUri != null)
+        {
+            // add last.
+            urls = urls.Where(x => x != currentConnectUri).Append(currentConnectUri).ToArray();
+        }
+
+        currentConnectUri = null;
         var urlEnumerator = urls.AsEnumerable().GetEnumerator();
         NatsUri? url = null;
     CONNECT_AGAIN:
@@ -228,8 +240,9 @@ public class NatsConnection : IAsyncDisposable
                 url = urlEnumerator.Current;
                 logger.LogInformation("Try to connect NATS {0}:{1}", url.Host, url.Port);
                 var conn = new PhysicalConnection();
-                await conn.ConnectAsync(url.Host, url.Port, CancellationToken.None); // TODO:CancellationToken
+                await conn.ConnectAsync(url.Host, url.Port, CancellationToken.None); // TODO:CancellationToken, Timeout
                 this.socket = conn;
+                this.currentConnectUri = url;
             }
             else
             {
@@ -277,7 +290,7 @@ public class NatsConnection : IAsyncDisposable
             socketWriter = null;
             socketReader = null;
 
-            await Task.Delay(TimeSpan.FromMilliseconds(100)); // TODO:retry span option
+            await WaitWithJitterAsync().ConfigureAwait(false);
             goto CONNECT_AGAIN;
         }
 
@@ -287,6 +300,14 @@ public class NatsConnection : IAsyncDisposable
             this.waitForOpenConnection.TrySetResult();
             reconnectLoop = Task.Run(ReconnectLoopAsync);
         }
+    }
+
+    async Task WaitWithJitterAsync()
+    {
+        var jitter = Random.Shared.NextDouble() * Options.ReconnectJitter.TotalMilliseconds;
+        var waitTime = Options.ReconnectWait + TimeSpan.FromMilliseconds(jitter);
+        logger.LogTrace("Wait {0}ms to reconnect.", waitTime.TotalMilliseconds);
+        await Task.Delay(waitTime).ConfigureAwait(false);
     }
 
     internal void EnqueuePing(AsyncPingCommand pingCommand)

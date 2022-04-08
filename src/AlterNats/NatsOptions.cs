@@ -5,6 +5,24 @@ using System.Text.Json.Serialization;
 
 namespace AlterNats;
 
+/// <summary>
+/// Immutable options for NatsConnection, you can configure via `with` operator.
+/// </summary>
+/// <param name="Url"></param>
+/// <param name="ConnectOptions"></param>
+/// <param name="Serializer"></param>
+/// <param name="LoggerFactory"></param>
+/// <param name="WriterBufferSize"></param>
+/// <param name="ReaderBufferSize"></param>
+/// <param name="UseThreadPoolCallback"></param>
+/// <param name="InboxPrefix"></param>
+/// <param name="NoRandomize"></param>
+/// <param name="PingInterval"></param>
+/// <param name="MaxPingOut"></param>
+/// <param name="ReconnectWait"></param>
+/// <param name="ReconnectJitter"></param>
+/// <param name="Timeout"></param>
+/// <param name="CommandPoolSize"></param>
 public sealed record NatsOptions
 (
     string Url,
@@ -47,11 +65,11 @@ public sealed record NatsOptions
         var urls = Url.Split(',');
         if (NoRandomize)
         {
-            return urls.Select(x => new NatsUri(x)).ToArray();
+            return urls.Select(x => new NatsUri(x)).Distinct().ToArray();
         }
         else
         {
-            return urls.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).ToArray();
+            return urls.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).Distinct().ToArray();
         }
     }
 }
