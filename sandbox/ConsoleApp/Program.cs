@@ -45,6 +45,7 @@ public class Program
         await connection.ConnectAsync();
 
 
+        Console.ReadLine();
 
         await connection.PublishAsync("foo", 100);
 

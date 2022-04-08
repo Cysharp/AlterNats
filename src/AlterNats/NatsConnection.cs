@@ -182,6 +182,8 @@ public class NatsConnection : IAsyncDisposable
         // If dispose this client, WaitForClosed throws OpeationCanceledException so stop reconnect-loop correctly.
         await socket!.WaitForClosed.ConfigureAwait(false);
 
+        logger.LogTrace("Detect connection closed, start to cleanup current connection and start to reconnect.");
+
         lock (gate)
         {
             this.ConnectionState = NatsConnectionState.Reconnecting;
@@ -198,7 +200,6 @@ public class NatsConnection : IAsyncDisposable
                 try
                 {
                     await reader.DisposeAsync().ConfigureAwait(false);
-                    logger.LogDebug("reader disposed");
                 }
                 catch (Exception ex)
                 {
