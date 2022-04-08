@@ -35,14 +35,24 @@ public class Program
 
         var options = NatsOptions.Default with
         {
-            // LoggerFactory = loggerFactory,
-            LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
+            LoggerFactory = loggerFactory,
+            //LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
+            ConnectTimeout = TimeSpan.FromSeconds(1),
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
         };
 
+
+
+
         var connection = new NatsConnection(options);
-        await connection.ConnectAsync();
+        try
+        {
+            await connection.ConnectAsync();
+        }
+        catch
+        {
+        }
 
 
         Console.ReadLine();

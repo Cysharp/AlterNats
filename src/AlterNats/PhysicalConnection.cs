@@ -49,6 +49,30 @@ internal sealed class PhysicalConnection : IAsyncDisposable
         return socket.ConnectAsync(host, port, cancellationToken);
     }
 
+    /// <summary>
+    /// Connect with Timeout. When failed, Dispose this connection.
+    /// </summary>
+    public async ValueTask ConnectAsync(string host, int port, TimeSpan timeout)
+    {
+        using var cts = new CancellationTokenSource(timeout);
+        try
+        {
+            await socket.ConnectAsync(host, port, cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await DisposeAsync().ConfigureAwait(false);
+            if (ex is OperationCanceledException)
+            {
+                throw new SocketException(10060); // 10060 = connection timeout.
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ValueTask<int> SendAsync(ReadOnlyMemory<byte> buffer, SocketFlags socketFlags)
     {

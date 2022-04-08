@@ -122,7 +122,7 @@ public class NatsConnection : IAsyncDisposable
             {
                 logger.LogInformation("Try to connect NATS {0}:{1}", uri.Host, uri.Port);
                 var conn = new PhysicalConnection();
-                await conn.ConnectAsync(uri.Host, uri.Port, CancellationToken.None); // TODO:CancellationToken, Timeout
+                await conn.ConnectAsync(uri.Host, uri.Port, Options.ConnectTimeout).ConfigureAwait(false);
                 this.socket = conn;
                 this.currentConnectUri = uri;
                 break;
@@ -241,7 +241,7 @@ public class NatsConnection : IAsyncDisposable
                 url = urlEnumerator.Current;
                 logger.LogInformation("Try to connect NATS {0}:{1}", url.Host, url.Port);
                 var conn = new PhysicalConnection();
-                await conn.ConnectAsync(url.Host, url.Port, CancellationToken.None); // TODO:CancellationToken, Timeout
+                await conn.ConnectAsync(url.Host, url.Port, Options.ConnectTimeout).ConfigureAwait(false);
                 this.socket = conn;
                 this.currentConnectUri = url;
             }

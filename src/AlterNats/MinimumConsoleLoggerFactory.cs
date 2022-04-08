@@ -47,7 +47,15 @@ public class MinimumConsoleLoggerFactory : ILoggerFactory
         {
             if (IsEnabled(logLevel))
             {
-                Console.WriteLine(formatter(state, exception));
+                if (exception != null)
+                {
+                    Console.WriteLine(formatter(state, exception));
+                    Console.WriteLine(exception.ToString());
+                }
+                else
+                {
+                    Console.WriteLine(formatter(state, exception));
+                }
             }
         }
     }

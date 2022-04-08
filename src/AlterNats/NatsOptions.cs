@@ -21,7 +21,7 @@ namespace AlterNats;
 /// <param name="MaxPingOut"></param>
 /// <param name="ReconnectWait"></param>
 /// <param name="ReconnectJitter"></param>
-/// <param name="Timeout"></param>
+/// <param name="ConnectTimeout"></param>
 /// <param name="CommandPoolSize"></param>
 public sealed record NatsOptions
 (
@@ -38,7 +38,7 @@ public sealed record NatsOptions
     int MaxPingOut,
     TimeSpan ReconnectWait,
     TimeSpan ReconnectJitter,
-    TimeSpan Timeout, // TODO:Connect Timeout?
+    TimeSpan ConnectTimeout,
     int CommandPoolSize
 )
 {
@@ -56,7 +56,7 @@ public sealed record NatsOptions
         MaxPingOut: 2,
         ReconnectWait: TimeSpan.FromSeconds(2),
         ReconnectJitter: TimeSpan.FromMilliseconds(100),
-        Timeout: TimeSpan.FromSeconds(2),
+        ConnectTimeout: TimeSpan.FromSeconds(2),
         CommandPoolSize: 256
     );
 
