@@ -81,6 +81,8 @@ namespace NatsBenchmark
             pubConn.ConnectAsync().AsTask().Wait();
             subConn.ConnectAsync().AsTask().Wait();
 
+
+
             var key = new NatsKey(subject);
 
             var d = subConn.SubscribeAsync<byte[]>(subject, _ =>
@@ -479,31 +481,31 @@ namespace NatsBenchmark
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
-            //runPubSubVector3("PubSubVector3", 10000000);
-            //runPubSub("PubSubNo", 10000000, 0);
-            //runPubSub("PubSub8b", 10000000, 8);
-            //runPubSub("PubSub32b", 10000000, 32);
-            //runPubSub("PubSub100b", 10000000, 100);
-            //runPubSub("PubSub256b", 10000000, 256);
-            //runPubSub("PubSub512b", 500000, 512);
-            //runPubSub("PubSub1k", 500000, 1024);
-            //runPubSub("PubSub4k", 500000, 1024 * 4);
-            //runPubSub("PubSub8k", 100000, 1024 * 8);
+            runPubSubVector3("PubSubVector3", 10000000);
+            runPubSub("PubSubNo", 10000000, 0);
+            runPubSub("PubSub8b", 10000000, 8);
+            runPubSub("PubSub32b", 10000000, 32);
+            runPubSub("PubSub100b", 10000000, 100);
+            runPubSub("PubSub256b", 10000000, 256);
+            runPubSub("PubSub512b", 500000, 512);
+            runPubSub("PubSub1k", 500000, 1024);
+            runPubSub("PubSub4k", 500000, 1024 * 4);
+            runPubSub("PubSub8k", 100000, 1024 * 8);
 
 
 
-            //RunPubSubAlterNatsVector3("AlterNatsV3", 10000000);
-            //RunPubSubAlterNats("AlterNatsNo", 10000000, 0);
+            RunPubSubAlterNatsVector3("AlterNatsV3", 10000000);
+            RunPubSubAlterNats("AlterNatsNo", 10000000, 0);
             RunPubSubAlterNats("AlterNats8b", 10000000, 8);
-            // RunPubSubAlterNatsPubSub2("AlterNats8b 2", 10000000, 8);
+            //RunPubSubAlterNatsPubSub2("AlterNats8b 2", 10000000, 8);
 
-            //RunPubSubAlterNats("AlterNats32b", 10000000, 32);
-            //RunPubSubAlterNats("AlterNats100b", 10000000, 100);
-            //RunPubSubAlterNats("AlterNats256b", 10000000, 256);
-            //RunPubSubAlterNats("AlterNats512b", 500000, 512);
-            //RunPubSubAlterNats("AlterNats1k", 500000, 1024);
-            //RunPubSubAlterNats("AlterNats4k", 500000, 1024 * 4);
-            //RunPubSubAlterNats("AlterNats8k", 100000, 1024 * 8);
+            RunPubSubAlterNats("AlterNats32b", 10000000, 32);
+            RunPubSubAlterNats("AlterNats100b", 10000000, 100);
+            RunPubSubAlterNats("AlterNats256b", 10000000, 256);
+            RunPubSubAlterNats("AlterNats512b", 500000, 512);
+            RunPubSubAlterNats("AlterNats1k", 500000, 1024);
+            RunPubSubAlterNats("AlterNats4k", 500000, 1024 * 4);
+            RunPubSubAlterNats("AlterNats8k", 100000, 1024 * 8);
 
             // Redis?
             // RunPubSubRedis("StackExchange.Redis", 10000000, 8);
