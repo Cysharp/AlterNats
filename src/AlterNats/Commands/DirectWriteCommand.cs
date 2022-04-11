@@ -1,21 +1,41 @@
 ﻿using AlterNats.Internal;
+using System.Text;
 
 namespace AlterNats.Commands;
 
-internal sealed class DirectWriteCommand : ICommand
+// public fore optimize reusing
+public sealed class DirectWriteCommand : ICommand
 {
-    readonly string protocol;
+    readonly byte[] protocol;
 
-    public DirectWriteCommand(string protocol)
+    /// <param name="protocol">raw command without \r\n</param>
+    /// <param name="repeatCount">repeating count.</param>
+    public DirectWriteCommand(string protocol, int repeatCount)
     {
-        this.protocol = protocol;
+        if (repeatCount < 1) throw new ArgumentException("repeatCount should >= 1, repeatCount:" + repeatCount);
+
+        if (repeatCount == 1)
+        {
+            this.protocol = Encoding.UTF8.GetBytes(protocol + "\r\n");
+        }
+        else
+        {
+            var bin = Encoding.UTF8.GetBytes(protocol + "\r\n");
+            this.protocol = new byte[bin.Length * repeatCount];
+            var span = this.protocol.AsSpan();
+            for (int i = 0; i < repeatCount; i++)
+            {
+                bin.CopyTo(span);
+                span = span.Slice(bin.Length);
+            }
+        }
     }
 
-    public void Return(ObjectPool pool)
+    void ICommand.Return(ObjectPool pool)
     {
     }
 
-    public void Write(ProtocolWriter writer)
+    void ICommand.Write(ProtocolWriter writer)
     {
         writer.WriteRaw(protocol);
     }

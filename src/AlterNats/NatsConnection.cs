@@ -443,6 +443,16 @@ public class NatsConnection : IAsyncDisposable
         commandWriter.TryWrite(command);
     }
 
+    public void PostDirectWrite(string protocol, int repeatCount = 1)
+    {
+        commandWriter.TryWrite(new DirectWriteCommand(protocol, repeatCount));
+    }
+
+    public void PostDirectWrite(DirectWriteCommand command)
+    {
+        commandWriter.TryWrite(command);
+    }
+
     public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
     {
         return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request)!; // NOTE:return nullable?
@@ -590,11 +600,6 @@ public class NatsConnection : IAsyncDisposable
     internal void PublishToResponseHandler(int requestId, in ReadOnlySequence<byte> buffer)
     {
         requestResponseManager.PublishToResponseHandler(requestId, buffer);
-    }
-
-    internal void PostDirectWrite(string protocol)
-    {
-        commandWriter.TryWrite(new DirectWriteCommand(protocol));
     }
 
     public async ValueTask DisposeAsync()

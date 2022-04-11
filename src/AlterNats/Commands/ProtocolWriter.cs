@@ -335,12 +335,11 @@ internal sealed class ProtocolWriter
         writer.Advance(offset);
     }
 
-    internal void WriteRaw(string protocol)
+    internal void WriteRaw(byte[] protocol)
     {
-        var encoded = Encoding.UTF8.GetBytes(protocol + "\r\n");
-        var span = writer.GetSpan(encoded.Length);
-        encoded.CopyTo(span);
-        writer.Advance(encoded.Length);
+        var span = writer.GetSpan(protocol.Length);
+        protocol.CopyTo(span);
+        writer.Advance(protocol.Length);
     }
 
     void WriteConstant(ReadOnlySpan<byte> constant)
