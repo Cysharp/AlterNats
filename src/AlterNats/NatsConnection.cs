@@ -431,6 +431,18 @@ public class NatsConnection : IAsyncDisposable
         return command.AsValueTask();
     }
 
+    public void PostPublishBatch<T>(IEnumerable<(NatsKey, T?)> values)
+    {
+        var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+        commandWriter.TryWrite(command);
+    }
+
+    public void PostPublishBatch<T>(IEnumerable<(string, T?)> values)
+    {
+        var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+        commandWriter.TryWrite(command);
+    }
+
     public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
     {
         return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request)!; // NOTE:return nullable?
