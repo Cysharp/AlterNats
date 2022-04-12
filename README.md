@@ -31,8 +31,7 @@ connection.PostPublish("foo", 2000);
 var options = NatsOptions.Default with
 {
     LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
-    Host = "localhost",
-    Port = 4222,
+    Url = "localhost:4222",
     ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
 };
 
