@@ -633,8 +633,6 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
-    // TODO:Auto Connect.
-
     public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request)
     {
         return RequestAsync<TRequest, TResponse>(new NatsKey(key, true), request);
@@ -642,32 +640,62 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> requestHandler)
     {
-        return subscriptionManager.AddRequestHandlerAsync(key.Key, requestHandler);
+        return SubscribeRequestAsync(key.Key, requestHandler);
     }
 
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> requestHandler)
     {
-        return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+        }
+        else
+        {
+            return WithConnectAsync(key, requestHandler, static (self, key, requestHandler) =>
+            {
+                return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, Task<TResponse>> requestHandler)
     {
-        return subscriptionManager.AddRequestHandlerAsync(key.Key, requestHandler);
+        return SubscribeRequestAsync(key.Key, requestHandler);
     }
 
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, Task<TResponse>> requestHandler)
     {
-        return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+        }
+        else
+        {
+            return WithConnectAsync(key, requestHandler, static (self, key, requestHandler) =>
+            {
+                return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
     {
-        return subscriptionManager.AddAsync(key.Key, null, handler);
+        return SubscribeAsync(key.Key, handler);
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
     {
-        return subscriptionManager.AddAsync(key, null, handler);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return subscriptionManager.AddAsync(key, null, handler);
+        }
+        else
+        {
+            return WithConnectAsync(key, handler, static (self, key, handler) =>
+            {
+                return self.subscriptionManager.AddAsync(key, null, handler);
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler)
@@ -677,57 +705,137 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler)
     {
-        return subscriptionManager.AddAsync<T>(key, null, async x =>
+        if (ConnectionState == NatsConnectionState.Open)
         {
-            try
+            return subscriptionManager.AddAsync<T>(key, null, async x =>
             {
-                await asyncHandler(x).ConfigureAwait(false);
-            }
-            catch (Exception ex)
+                try
+                {
+                    await asyncHandler(x).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error occured during subscribe message.");
+                }
+            });
+        }
+        else
+        {
+            return WithConnectAsync(key, asyncHandler, static (self, key, asyncHandler) =>
             {
-                logger.LogError(ex, "Error occured during subscribe message.");
-            }
-        });
+                return self.subscriptionManager.AddAsync<T>(key, null, async x =>
+                {
+                    try
+                    {
+                        await asyncHandler(x).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        self.logger.LogError(ex, "Error occured during subscribe message.");
+                    }
+                });
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
     {
-        return subscriptionManager.AddAsync(key.Key, queueGroup, handler);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return subscriptionManager.AddAsync(key.Key, queueGroup, handler);
+        }
+        else
+        {
+            return WithConnectAsync(key, queueGroup, handler, static (self, key, queueGroup, handler) =>
+            {
+                return self.subscriptionManager.AddAsync(key.Key, queueGroup, handler);
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, string queueGroup, Action<T> handler)
     {
-        return subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
+        }
+        else
+        {
+            return WithConnectAsync(key, queueGroup, handler, static (self, key, queueGroup, handler) =>
+            {
+                return self.subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler)
     {
-        return subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
+        if (ConnectionState == NatsConnectionState.Open)
         {
-            try
+            return subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
             {
-                await asyncHandler(x).ConfigureAwait(false);
-            }
-            catch (Exception ex)
+                try
+                {
+                    await asyncHandler(x).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error occured during subscribe message.");
+                }
+            });
+        }
+        else
+        {
+            return WithConnectAsync(key, queueGroup, asyncHandler, static (self, key, queueGroup, asyncHandler) =>
             {
-                logger.LogError(ex, "Error occured during subscribe message.");
-            }
-        });
+                return self.subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
+                {
+                    try
+                    {
+                        await asyncHandler(x).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        self.logger.LogError(ex, "Error occured during subscribe message.");
+                    }
+                });
+            });
+        }
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler)
     {
-        return subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
+        if (ConnectionState == NatsConnectionState.Open)
         {
-            try
+            return subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
             {
-                await asyncHandler(x).ConfigureAwait(false);
-            }
-            catch (Exception ex)
+                try
+                {
+                    await asyncHandler(x).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error occured during subscribe message.");
+                }
+            });
+        }
+        else
+        {
+            return WithConnectAsync(key, queueGroup, asyncHandler, static (self, key, queueGroup, asyncHandler) =>
             {
-                logger.LogError(ex, "Error occured during subscribe message.");
-            }
-        });
+                return self.subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
+                {
+                    try
+                    {
+                        await asyncHandler(x).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        self.logger.LogError(ex, "Error occured during subscribe message.");
+                    }
+                });
+            });
+        }
     }
 
     public IObservable<T> AsObservable<T>(string key)
@@ -843,12 +951,6 @@ public class NatsConnection : IAsyncDisposable
         core(this, item1, item2);
     }
 
-    async ValueTask WithConnectAsync(Func<NatsConnection, ValueTask> coreAsync)
-    {
-        await ConnectAsync().ConfigureAwait(false);
-        await coreAsync(this).ConfigureAwait(false);
-    }
-
     async ValueTask WithConnectAsync<T1>(T1 item1, Func<NatsConnection, T1, ValueTask> coreAsync)
     {
         await ConnectAsync().ConfigureAwait(false);
@@ -867,15 +969,15 @@ public class NatsConnection : IAsyncDisposable
         return await coreAsync(this).ConfigureAwait(false);
     }
 
-    async ValueTask<TResult> WithConnectAsync<T1, TResult>(T1 item1, Func<NatsConnection, T1, ValueTask<TResult>> coreAsync)
-    {
-        await ConnectAsync().ConfigureAwait(false);
-        return await coreAsync(this, item1).ConfigureAwait(false);
-    }
-
     async ValueTask<TResult> WithConnectAsync<T1, T2, TResult>(T1 item1, T2 item2, Func<NatsConnection, T1, T2, ValueTask<TResult>> coreAsync)
     {
         await ConnectAsync().ConfigureAwait(false);
         return await coreAsync(this, item1, item2).ConfigureAwait(false);
+    }
+
+    async ValueTask<TResult> WithConnectAsync<T1, T2, T3, TResult>(T1 item1, T2 item2, T3 item3, Func<NatsConnection, T1, T2, T3, ValueTask<TResult>> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        return await coreAsync(this, item1, item2, item3).ConfigureAwait(false);
     }
 }

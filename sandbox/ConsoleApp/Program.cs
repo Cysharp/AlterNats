@@ -46,15 +46,12 @@ public class Program
 
 
         var connection = new NatsConnection(options);
-        try
-        {
-            await connection.ConnectAsync();
-        }
-        catch
-        {
-        }
 
-
+        await Parallel.ForEachAsync(Enumerable.Range(0, 100), new ParallelOptions { MaxDegreeOfParallelism = 100 }, async (i, ct) =>
+         {
+             var ttl = await connection.PingAsync();
+             Console.WriteLine(ttl);
+         });
         Console.ReadLine();
 
         await connection.PublishAsync("foo", 100);
