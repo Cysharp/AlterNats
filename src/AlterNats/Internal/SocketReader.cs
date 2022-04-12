@@ -9,7 +9,7 @@ namespace AlterNats.Internal;
 // When socket is closed/disposed, operation throws SocketClosedException
 internal sealed class SocketReader
 {
-    PhysicalConnection socket;
+    TcpConnection socket;
 
     Memory<byte> availableMemory;
     readonly int minimumBufferSize;
@@ -18,7 +18,7 @@ internal sealed class SocketReader
     readonly ILogger<SocketReader> logger;
     readonly bool isTraceLogging;
 
-    public SocketReader(PhysicalConnection socket, int minimumBufferSize, ILoggerFactory loggerFactory)
+    public SocketReader(TcpConnection socket, int minimumBufferSize, ILoggerFactory loggerFactory)
     {
         this.socket = socket;
         this.minimumBufferSize = minimumBufferSize;

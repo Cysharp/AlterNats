@@ -31,6 +31,12 @@ public sealed class DirectWriteCommand : ICommand
         }
     }
 
+    /// <param name="protocol">raw command protocol, requires \r\n.</param>
+    public DirectWriteCommand(byte[] protocol)
+    {
+        this.protocol = protocol;
+    }
+
     void ICommand.Return(ObjectPool pool)
     {
     }

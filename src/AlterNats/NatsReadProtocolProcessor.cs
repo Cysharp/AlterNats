@@ -14,7 +14,7 @@ namespace AlterNats;
 
 internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
 {
-    readonly PhysicalConnection socket;
+    readonly TcpConnection socket;
     readonly NatsConnection connection;
     readonly SocketReader socketReader;
     readonly Task readLoop;
@@ -24,7 +24,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     readonly bool isEnabledTraceLogging;
     int disposed;
 
-    public NatsReadProtocolProcessor(PhysicalConnection socket, NatsConnection connection, TaskCompletionSource waitForInfoSignal)
+    public NatsReadProtocolProcessor(TcpConnection socket, NatsConnection connection, TaskCompletionSource waitForInfoSignal)
     {
         this.socket = socket;
         this.connection = connection;

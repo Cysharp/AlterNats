@@ -2,6 +2,7 @@
 using AlterNats.Internal;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
 
@@ -52,7 +53,7 @@ public class NatsConnection : IAsyncDisposable
     bool isDisposed;
 
     // when reconnect, make new instance.
-    PhysicalConnection? socket;
+    TcpConnection? socket;
     NatsUri? currentConnectUri;
     NatsReadProtocolProcessor? socketReader;
     NatsPipeliningWriteProtocolProcessor? socketWriter;
@@ -98,9 +99,11 @@ public class NatsConnection : IAsyncDisposable
             }
             else
             {
+                // when closed, change state to connecting and only first connection try-to-connect.
                 ConnectionState = NatsConnectionState.Connecting;
             }
         }
+
         if (waiter != null)
         {
             await waiter.Task.ConfigureAwait(false);
@@ -115,13 +118,15 @@ public class NatsConnection : IAsyncDisposable
 
     async ValueTask InitialConnectAsync()
     {
+        Debug.Assert(ConnectionState == NatsConnectionState.Connecting);
+
         var uris = Options.GetSeedUris();
         foreach (var uri in uris)
         {
             try
             {
                 logger.LogInformation("Try to connect NATS {0}:{1}", uri.Host, uri.Port);
-                var conn = new PhysicalConnection();
+                var conn = new TcpConnection();
                 await conn.ConnectAsync(uri.Host, uri.Port, Options.ConnectTimeout).ConfigureAwait(false);
                 this.socket = conn;
                 this.currentConnectUri = uri;
@@ -129,14 +134,20 @@ public class NatsConnection : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                this.ConnectionState = NatsConnectionState.Closed;
                 logger.LogError(ex, "Fail to connect NATS {0}:{1}.", uri.Host, uri.Port);
             }
         }
         if (this.socket == null)
         {
-            // TODO:require to retry initial connect???
-            throw new Exception("can not connect uris: " + String.Join(",", uris.Select(x => x.ToString()))); // TODO:throw other Exception
+            var exception = new NatsException("can not connect uris: " + String.Join(",", uris.Select(x => x.ToString())));
+            lock (gate)
+            {
+                this.ConnectionState = NatsConnectionState.Closed; // allow retry connect
+                waitForOpenConnection.TrySetException(exception); // throw for waiter
+                this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            throw exception;
         }
 
         // Connected completely but still ConnnectionState is Connecting(require after receive INFO).
@@ -155,17 +166,27 @@ public class NatsConnection : IAsyncDisposable
             await connectCommand.AsValueTask().ConfigureAwait(false);
             await waitForInfoSignal.Task.ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
             // can not start reader/writer
+            var uri = currentConnectUri;
+
             await socketWriter!.DisposeAsync();
             await socketReader!.DisposeAsync();
             await socket!.DisposeAsync();
             socket = null;
             socketWriter = null;
             socketReader = null;
-            ConnectionState = NatsConnectionState.Closed;
-            throw;
+            currentConnectUri = null;
+
+            var exception = new NatsException("can not start to connect nats server: " + uri, ex);
+            lock (gate)
+            {
+                this.ConnectionState = NatsConnectionState.Closed; // allow retry connect
+                waitForOpenConnection.TrySetException(exception); // throw for waiter
+                this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+            throw exception;
         }
 
         // After INFO received, reconnect server list has been get.
@@ -217,11 +238,19 @@ public class NatsConnection : IAsyncDisposable
         NatsUri[] urls = Array.Empty<NatsUri>();
         if (Options.NoRandomize)
         {
-            urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).Distinct().ToArray() ?? Options.GetSeedUris();
+            urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).Distinct().ToArray() ?? Array.Empty<NatsUri>();
+            if (urls.Length == 0)
+            {
+                urls = Options.GetSeedUris();
+            }
         }
         else
         {
-            urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).Distinct().ToArray() ?? Options.GetSeedUris();
+            urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).Distinct().ToArray() ?? Array.Empty<NatsUri>();
+            if (urls.Length == 0)
+            {
+                urls = Options.GetSeedUris();
+            }
         }
 
         if (this.currentConnectUri != null)
@@ -240,7 +269,7 @@ public class NatsConnection : IAsyncDisposable
             {
                 url = urlEnumerator.Current;
                 logger.LogInformation("Try to connect NATS {0}:{1}", url.Host, url.Port);
-                var conn = new PhysicalConnection();
+                var conn = new TcpConnection();
                 await conn.ConnectAsync(url.Host, url.Port, Options.ConnectTimeout).ConfigureAwait(false);
                 this.socket = conn;
                 this.currentConnectUri = url;
@@ -331,7 +360,14 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPing()
     {
-        commandWriter.TryWrite(PingCommand.Create(pool));
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            commandWriter.TryWrite(PingCommand.Create(pool));
+        }
+        else
+        {
+            WithConnect(static self => self.commandWriter.TryWrite(PingCommand.Create(self.pool)));
+        }
     }
 
     /// <summary>
@@ -339,20 +375,40 @@ public class NatsConnection : IAsyncDisposable
     /// </summary>
     public ValueTask<TimeSpan> PingAsync()
     {
-        var command = AsyncPingCommand.Create(this, pool);
-        commandWriter.TryWrite(command);
-        return command.AsValueTask(); // TODO:PING Timeout.
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = AsyncPingCommand.Create(this, pool);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
+        }
+        else
+        {
+            return WithConnectAsync(static self =>
+            {
+                var command = AsyncPingCommand.Create(self, self.pool);
+                self.commandWriter.TryWrite(command);
+                return command.AsValueTask();
+            });
+        }
     }
 
     public ValueTask PublishAsync<T>(in NatsKey key, T value)
     {
-        if (ConnectionState != NatsConnectionState.Open)
+        if (ConnectionState == NatsConnectionState.Open)
         {
+            var command = AsyncPublishCommand<T>.Create(pool, key, value, Options.Serializer);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
         }
-
-        var command = AsyncPublishCommand<T>.Create(pool, key, value, Options.Serializer);
-        commandWriter.TryWrite(command);
-        return command.AsValueTask();
+        else
+        {
+            return WithConnectAsync(key, value, static (self, k, v) =>
+            {
+                var command = AsyncPublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
+                self.commandWriter.TryWrite(command);
+                return command.AsValueTask();
+            });
+        }
     }
 
     public ValueTask PublishAsync<T>(string key, T value)
@@ -362,9 +418,7 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishAsync(in NatsKey key, byte[] value)
     {
-        var command = AsyncPublishBytesCommand.Create(pool, key, value);
-        commandWriter.TryWrite(command);
-        return command.AsValueTask();
+        return PublishAsync(key, new ReadOnlyMemory<byte>(value));
     }
 
     public ValueTask PublishAsync(string key, byte[] value)
@@ -374,9 +428,21 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishAsync(in NatsKey key, ReadOnlyMemory<byte> value)
     {
-        var command = AsyncPublishBytesCommand.Create(pool, key, value);
-        commandWriter.TryWrite(command);
-        return command.AsValueTask();
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = AsyncPublishBytesCommand.Create(pool, key, value);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
+        }
+        else
+        {
+            return WithConnectAsync(key, value, static (self, k, v) =>
+            {
+                var command = AsyncPublishBytesCommand.Create(self.pool, k, v);
+                self.commandWriter.TryWrite(command);
+                return command.AsValueTask();
+            });
+        }
     }
 
     public ValueTask PublishAsync(string key, ReadOnlyMemory<byte> value)
@@ -386,8 +452,19 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPublish<T>(in NatsKey key, T value)
     {
-        var command = PublishCommand<T>.Create(pool, key, value, Options.Serializer);
-        commandWriter.TryWrite(command);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = PublishCommand<T>.Create(pool, key, value, Options.Serializer);
+            commandWriter.TryWrite(command);
+        }
+        else
+        {
+            WithConnect(key, value, static (self, k, v) =>
+            {
+                var command = PublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
+                self.commandWriter.TryWrite(command);
+            });
+        }
     }
 
     public void PostPublish<T>(string key, T value)
@@ -397,8 +474,7 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPublish(in NatsKey key, byte[] value)
     {
-        var command = PublishBytesCommand.Create(pool, key, value);
-        commandWriter.TryWrite(command);
+        PostPublish(key, new ReadOnlyMemory<byte>(value));
     }
 
     public void PostPublish(string key, byte[] value)
@@ -408,8 +484,19 @@ public class NatsConnection : IAsyncDisposable
 
     public void PostPublish(in NatsKey key, ReadOnlyMemory<byte> value)
     {
-        var command = PublishBytesCommand.Create(pool, key, value);
-        commandWriter.TryWrite(command);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = PublishBytesCommand.Create(pool, key, value);
+            commandWriter.TryWrite(command);
+        }
+        else
+        {
+            WithConnect(key, value, static (self, k, v) =>
+            {
+                var command = PublishBytesCommand.Create(self.pool, k, v);
+                self.commandWriter.TryWrite(command);
+            });
+        }
     }
 
     public void PostPublish(string key, ReadOnlyMemory<byte> value)
@@ -419,46 +506,136 @@ public class NatsConnection : IAsyncDisposable
 
     public ValueTask PublishBatchAsync<T>(IEnumerable<(NatsKey, T?)> values)
     {
-        var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-        commandWriter.TryWrite(command);
-        return command.AsValueTask();
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
+        }
+        else
+        {
+            return WithConnectAsync(values, static (self, v) =>
+            {
+                var command = AsyncPublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
+                self.commandWriter.TryWrite(command);
+                return command.AsValueTask();
+            });
+        }
     }
 
     public ValueTask PublishBatchAsync<T>(IEnumerable<(string, T?)> values)
     {
-        var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-        commandWriter.TryWrite(command);
-        return command.AsValueTask();
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
+        }
+        else
+        {
+            var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
+        }
     }
 
     public void PostPublishBatch<T>(IEnumerable<(NatsKey, T?)> values)
     {
-        var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-        commandWriter.TryWrite(command);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            commandWriter.TryWrite(command);
+        }
+        else
+        {
+            WithConnect(values, static (self, v) =>
+            {
+                var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
+                self.commandWriter.TryWrite(command);
+            });
+        }
     }
 
     public void PostPublishBatch<T>(IEnumerable<(string, T?)> values)
     {
-        var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-        commandWriter.TryWrite(command);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            commandWriter.TryWrite(command);
+        }
+        else
+        {
+            WithConnect(values, static (self, v) =>
+            {
+                var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
+                self.commandWriter.TryWrite(command);
+            });
+        }
     }
 
     public void PostDirectWrite(string protocol, int repeatCount = 1)
     {
-        commandWriter.TryWrite(new DirectWriteCommand(protocol, repeatCount));
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            commandWriter.TryWrite(new DirectWriteCommand(protocol, repeatCount));
+        }
+        else
+        {
+            WithConnect(protocol, repeatCount, static (self, protocol, repeatCount) =>
+            {
+                self.commandWriter.TryWrite(new DirectWriteCommand(protocol, repeatCount));
+            });
+        }
+    }
+
+    public void PostDirectWrite(byte[] protocol)
+    {
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            commandWriter.TryWrite(new DirectWriteCommand(protocol));
+        }
+        else
+        {
+            WithConnect(protocol, static (self, protocol) =>
+            {
+                self.commandWriter.TryWrite(new DirectWriteCommand(protocol));
+            });
+        }
     }
 
     public void PostDirectWrite(DirectWriteCommand command)
     {
-        commandWriter.TryWrite(command);
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            commandWriter.TryWrite(command);
+        }
+        else
+        {
+            WithConnect(command, static (self, command) =>
+            {
+                self.commandWriter.TryWrite(command);
+            });
+        }
     }
 
-    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
+    public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
     {
-        return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request)!; // NOTE:return nullable?
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request);
+        }
+        else
+        {
+            return WithConnectAsync(key, request, static (self, key, request) =>
+            {
+                return self.requestResponseManager.AddAsync<TRequest, TResponse>(key, self.indBoxPrefix, request);
+            });
+        }
     }
 
-    public ValueTask<TResponse> RequestAsync<TRequest, TResponse>(string key, TRequest request)
+    // TODO:Auto Connect.
+
+    public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request)
     {
         return RequestAsync<TRequest, TResponse>(new NatsKey(key, true), request);
     }
@@ -631,5 +808,74 @@ public class NatsConnection : IAsyncDisposable
     void ThrowIfDisposed()
     {
         if (isDisposed) throw new ObjectDisposedException(null);
+    }
+
+    async void WithConnect(Action<NatsConnection> core)
+    {
+        try
+        {
+            await ConnectAsync().ConfigureAwait(false);
+            return;
+        }
+        catch { } // log will shown on ConnectAsync failed
+        core(this);
+    }
+
+    async void WithConnect<T1>(T1 item1, Action<NatsConnection, T1> core)
+    {
+        try
+        {
+            await ConnectAsync().ConfigureAwait(false);
+            return;
+        }
+        catch { } // log will shown on ConnectAsync failed
+        core(this, item1);
+    }
+
+    async void WithConnect<T1, T2>(T1 item1, T2 item2, Action<NatsConnection, T1, T2> core)
+    {
+        try
+        {
+            await ConnectAsync().ConfigureAwait(false);
+            return;
+        }
+        catch { } // log will shown on ConnectAsync failed
+        core(this, item1, item2);
+    }
+
+    async ValueTask WithConnectAsync(Func<NatsConnection, ValueTask> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        await coreAsync(this).ConfigureAwait(false);
+    }
+
+    async ValueTask WithConnectAsync<T1>(T1 item1, Func<NatsConnection, T1, ValueTask> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        await coreAsync(this, item1).ConfigureAwait(false);
+    }
+
+    async ValueTask WithConnectAsync<T1, T2>(T1 item1, T2 item2, Func<NatsConnection, T1, T2, ValueTask> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        await coreAsync(this, item1, item2).ConfigureAwait(false);
+    }
+
+    async ValueTask<T> WithConnectAsync<T>(Func<NatsConnection, ValueTask<T>> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        return await coreAsync(this).ConfigureAwait(false);
+    }
+
+    async ValueTask<TResult> WithConnectAsync<T1, TResult>(T1 item1, Func<NatsConnection, T1, ValueTask<TResult>> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        return await coreAsync(this, item1).ConfigureAwait(false);
+    }
+
+    async ValueTask<TResult> WithConnectAsync<T1, T2, TResult>(T1 item1, T2 item2, Func<NatsConnection, T1, T2, ValueTask<TResult>> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        return await coreAsync(this, item1, item2).ConfigureAwait(false);
     }
 }

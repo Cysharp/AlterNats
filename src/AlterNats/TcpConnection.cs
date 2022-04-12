@@ -12,7 +12,7 @@ internal sealed class SocketClosedException : Exception
     }
 }
 
-internal sealed class PhysicalConnection : IAsyncDisposable
+internal sealed class TcpConnection : IAsyncDisposable
 {
     readonly Socket socket;
     readonly TaskCompletionSource<Exception> waitForClosedSource = new();
@@ -20,7 +20,7 @@ internal sealed class PhysicalConnection : IAsyncDisposable
 
     public Task<Exception> WaitForClosed => waitForClosedSource.Task;
 
-    public PhysicalConnection()
+    public TcpConnection()
     {
         this.socket = new Socket(Socket.OSSupportsIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         if (Socket.OSSupportsIPv6)

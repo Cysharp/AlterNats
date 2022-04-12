@@ -9,7 +9,7 @@ namespace AlterNats;
 
 internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
 {
-    readonly PhysicalConnection socket;
+    readonly TcpConnection socket;
     readonly WriterState state;
     readonly ObjectPool pool;
     readonly FixedArrayBufferWriter bufferWriter;
@@ -20,7 +20,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     readonly CancellationTokenSource cancellationTokenSource;
     int disposed;
 
-    public NatsPipeliningWriteProtocolProcessor(PhysicalConnection socket, WriterState state, ObjectPool pool)
+    public NatsPipeliningWriteProtocolProcessor(TcpConnection socket, WriterState state, ObjectPool pool)
     {
         this.socket = socket;
         this.state = state;
