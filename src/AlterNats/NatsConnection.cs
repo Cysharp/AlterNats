@@ -189,9 +189,10 @@ public class NatsConnection : IAsyncDisposable
             throw exception;
         }
 
-        // After INFO received, reconnect server list has been get.
         lock (gate)
         {
+            var url = currentConnectUri;
+            logger.LogInformation("Connect succeed, NATS {0}:{1}", url?.Host, url?.Port);
             this.ConnectionState = NatsConnectionState.Open;
             this.waitForOpenConnection.TrySetResult();
             reconnectLoop = Task.Run(ReconnectLoopAsync);
@@ -306,15 +307,15 @@ public class NatsConnection : IAsyncDisposable
 
             if (socketWriter != null)
             {
-                await socketWriter.DisposeAsync();
+                await socketWriter.DisposeAsync().ConfigureAwait(false);
             }
             if (socketReader != null)
             {
-                await socketReader.DisposeAsync();
+                await socketReader.DisposeAsync().ConfigureAwait(false);
             }
             if (socket != null)
             {
-                await socket.DisposeAsync();
+                await socket.DisposeAsync().ConfigureAwait(false);
             }
             socket = null;
             socketWriter = null;
@@ -326,6 +327,7 @@ public class NatsConnection : IAsyncDisposable
 
         lock (gate)
         {
+            logger.LogInformation("Connect succeed, NATS {0}:{1}", url.Host, url.Port);
             this.ConnectionState = NatsConnectionState.Open;
             this.waitForOpenConnection.TrySetResult();
             reconnectLoop = Task.Run(ReconnectLoopAsync);
