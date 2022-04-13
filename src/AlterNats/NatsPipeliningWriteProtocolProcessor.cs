@@ -48,6 +48,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                 var firstCommands = state.PriorityCommands;
                 if (firstCommands.Count != 0)
                 {
+                    var count = firstCommands.Count;
                     var tempBuffer = new FixedArrayBufferWriter(1024);
                     var tempWriter = new ProtocolWriter(tempBuffer);
                     foreach (var command in firstCommands)
@@ -68,7 +69,13 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                         var memory = tempBuffer.WrittenMemory;
                         do
                         {
+                            stopwatch.Restart();
                             var sent = await socket.SendAsync(memory, SocketFlags.None).ConfigureAwait(false);
+                            stopwatch.Stop();
+                            if (isEnabledTraceLogging)
+                            {
+                                logger.LogTrace("Socket.SendAsync. Size: {0} BatchSize: {1} Elapsed: {2}ms", sent, count, stopwatch.Elapsed.TotalMilliseconds);
+                            }
                             memory = memory.Slice(sent);
                         } while (memory.Length > 0);
                     }
@@ -120,11 +127,6 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                     {
                         // SendAsync(ReadOnlyMemory) is very efficient, internally using AwaitableAsyncSocketEventArgs
                         // should use cancellation token?, currently no, wait for flush complete.
-                        if (isEnabledTraceLogging)
-                        {
-                            logger.LogTrace("SocketWriter Start to send BatchSize: {0}", count);
-                        }
-
                         var memory = bufferWriter.WrittenMemory;
                         do
                         {
@@ -133,7 +135,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                             stopwatch.Stop();
                             if (isEnabledTraceLogging)
                             {
-                                logger.LogTrace("Socket.SendAsync. Size: {0} Elapsed: {1}ms", sent, stopwatch.Elapsed.TotalMilliseconds);
+                                logger.LogTrace("Socket.SendAsync. Size: {0} BatchSize: {1} Elapsed: {2}ms", sent, count, stopwatch.Elapsed.TotalMilliseconds);
                             }
                             if (sent == 0)
                             {

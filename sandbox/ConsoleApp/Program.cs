@@ -39,18 +39,21 @@ public class Program
             //LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
             ConnectTimeout = TimeSpan.FromSeconds(1),
-            ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false },
-            PingInterval = TimeSpan.Zero
+            ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false, AuthToken = "s3cr3t" },
+            PingInterval = TimeSpan.Zero,
         };
-
-
 
 
         var connection = new NatsConnection(options);
 
         await connection.ConnectAsync();
 
+        await connection.SubscribeAsync("foo", (string x) =>
+        {
+            Console.WriteLine(x);
+        });
 
+        await connection.PublishAsync("foo", "takoyaki");
 
         Console.ReadLine();
     }
