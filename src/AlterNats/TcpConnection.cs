@@ -85,6 +85,11 @@ internal sealed class TcpConnection : IAsyncDisposable
         return socket.ReceiveAsync(buffer, socketFlags, CancellationToken.None);
     }
 
+    public ValueTask AbortConnectionAsync(CancellationToken cancellationToken)
+    {
+        return socket.DisconnectAsync(false, cancellationToken);
+    }
+
     public ValueTask DisposeAsync()
     {
         if (Interlocked.Increment(ref disposed) == 1)

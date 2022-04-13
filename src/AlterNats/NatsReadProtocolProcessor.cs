@@ -241,6 +241,8 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             const int PongSize = 6; // PONG\r\n
 
+            connection.ResetPongCount(); // reset count for PingTimer
+
             if (pingCommands.TryDequeue(out var pingCommand))
             {
                 var start = pingCommand.WriteTime;

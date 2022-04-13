@@ -39,7 +39,8 @@ public class Program
             //LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
             ConnectTimeout = TimeSpan.FromSeconds(1),
-            ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false }
+            ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false },
+            PingInterval = TimeSpan.FromSeconds(5)
         };
 
 
@@ -47,38 +48,11 @@ public class Program
 
         var connection = new NatsConnection(options);
 
-        await Parallel.ForEachAsync(Enumerable.Range(0, 100), new ParallelOptions { MaxDegreeOfParallelism = 100 }, async (i, ct) =>
-         {
-             var ttl = await connection.PingAsync();
-             Console.WriteLine(ttl);
-         });
-        Console.ReadLine();
-
-        await connection.PublishAsync("foo", 100);
-
-        await connection.SubscribeAsync<int>("foo", x =>
-        {
-            Console.WriteLine(x);
-        });
-
-        // Server
-        await connection.SubscribeRequestAsync<FooRequest, FooResponse>("hogemoge.key", req =>
-        {
-            Console.WriteLine("YEAH?");
-            return new FooResponse();
-        });
-
-        // Client
-        var response = await connection.RequestAsync<FooRequest, FooResponse>("hogemoge.key", new FooRequest());
+        await connection.ConnectAsync();
 
 
-
-        var ttl = await connection.PingAsync();
-        Console.WriteLine("RTT:" + ttl.TotalMilliseconds);
 
         Console.ReadLine();
-
-
     }
 
     //static void CalcCommandPushPop(NatsKey key, INatsSerializer serializer)
