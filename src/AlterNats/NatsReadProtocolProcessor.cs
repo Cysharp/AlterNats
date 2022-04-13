@@ -19,18 +19,20 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     readonly SocketReader socketReader;
     readonly Task readLoop;
     readonly TaskCompletionSource waitForInfoSignal;
+    readonly TaskCompletionSource waitForPongOrErrorSignal;  // wait for initial connection
     readonly ConcurrentQueue<AsyncPingCommand> pingCommands; // wait for pong
     readonly ILogger<NatsReadProtocolProcessor> logger;
     readonly bool isEnabledTraceLogging;
     int disposed;
 
-    public NatsReadProtocolProcessor(TcpConnection socket, NatsConnection connection, TaskCompletionSource waitForInfoSignal)
+    public NatsReadProtocolProcessor(TcpConnection socket, NatsConnection connection, TaskCompletionSource waitForInfoSignal, TaskCompletionSource waitForPongOrErrorSignal)
     {
         this.socket = socket;
         this.connection = connection;
         this.logger = connection.Options.LoggerFactory.CreateLogger<NatsReadProtocolProcessor>();
         this.isEnabledTraceLogging = logger.IsEnabled(LogLevel.Trace);
         this.waitForInfoSignal = waitForInfoSignal;
+        this.waitForPongOrErrorSignal = waitForPongOrErrorSignal;
         this.pingCommands = new ConcurrentQueue<AsyncPingCommand>();
         this.socketReader = new SocketReader(socket, connection.Options.ReaderBufferSize, connection.Options.LoggerFactory);
         this.readLoop = Task.Run(ReadLoopAsync);
@@ -242,6 +244,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             const int PongSize = 6; // PONG\r\n
 
             connection.ResetPongCount(); // reset count for PingTimer
+            waitForPongOrErrorSignal.TrySetResult(); // set for initial connect
 
             if (pingCommands.TryDequeue(out var pingCommand))
             {
@@ -270,12 +273,14 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 var newPosition = newBuffer.PositionOf((byte)'\n');
                 var error = ParseError(newBuffer.Slice(0, buffer.GetOffset(newPosition!.Value) - 1));
                 logger.LogError(error);
+                waitForPongOrErrorSignal.TrySetException(new NatsException(error));
                 return newBuffer.Slice(newBuffer.GetPosition(1, newPosition!.Value));
             }
             else
             {
                 var error = ParseError(buffer.Slice(0, buffer.GetOffset(position.Value) - 1));
                 logger.LogError(error);
+                waitForPongOrErrorSignal.TrySetException(new NatsException(error));
                 return buffer.Slice(buffer.GetPosition(1, position.Value));
             }
         }
@@ -424,6 +429,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                 item.SetCanceled(CancellationToken.None);
             }
             waitForInfoSignal.TrySetCanceled();
+            waitForPongOrErrorSignal.TrySetCanceled();
         }
     }
 

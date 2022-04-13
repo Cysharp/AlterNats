@@ -26,7 +26,7 @@ public class Program
             .AddLogging(x =>
             {
                 x.ClearProviders();
-                x.SetMinimumLevel(LogLevel.Information);
+                x.SetMinimumLevel(LogLevel.Trace);
                 x.AddZLoggerConsole();
             })
             .BuildServiceProvider();
@@ -40,7 +40,7 @@ public class Program
             Serializer = new MessagePackNatsSerializer(),
             ConnectTimeout = TimeSpan.FromSeconds(1),
             ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false },
-            PingInterval = TimeSpan.FromSeconds(5)
+            PingInterval = TimeSpan.Zero
         };
 
 

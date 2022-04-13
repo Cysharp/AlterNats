@@ -153,19 +153,25 @@ public class NatsConnection : IAsyncDisposable
 
         // Connected completely but still ConnnectionState is Connecting(require after receive INFO).
 
-        // add CONNECT command to priority lane
+        // add CONNECT and PING command to priority lane
         var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions);
         writerState.PriorityCommands.Add(connectCommand);
+        writerState.PriorityCommands.Add(PingCommand.Create(pool));
 
         // Run Reader/Writer LOOP start
         var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waitForPongOrErrorSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool);
-        this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal);
+        this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal, waitForPongOrErrorSignal);
 
         try
         {
-            await connectCommand.AsValueTask().ConfigureAwait(false);
+            // before send connect, wait INFO.
             await waitForInfoSignal.Task.ConfigureAwait(false);
+            // send COMMAND and PING
+            await connectCommand.AsValueTask().ConfigureAwait(false);
+            // receive COMMAND response(PONG or ERROR)
+            await waitForPongOrErrorSignal.Task.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -287,9 +293,10 @@ public class NatsConnection : IAsyncDisposable
                     goto CONNECT_AGAIN;
                 }
 
-                // add CONNECT command to priority lane
+                // add CONNECT and PING command to priority lane
                 var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions);
                 writerState.PriorityCommands.Add(connectCommand);
+                writerState.PriorityCommands.Add(PingCommand.Create(pool));
 
                 // Add SUBSCRIBE command to priority lane
                 var subscribeCommand = AsyncSubscribeBatchCommand.Create(pool, subscriptionManager.GetExistingSubscriptions());
@@ -297,12 +304,14 @@ public class NatsConnection : IAsyncDisposable
 
                 // Run Reader/Writer LOOP start
                 var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var waitForPongOrErrorSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool);
-                this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal);
+                this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal, waitForPongOrErrorSignal);
 
-                await connectCommand.AsValueTask().ConfigureAwait(false);
-                await subscribeCommand.AsValueTask().ConfigureAwait(false);
                 await waitForInfoSignal.Task.ConfigureAwait(false);
+                await connectCommand.AsValueTask().ConfigureAwait(false);
+                await waitForPongOrErrorSignal.Task.ConfigureAwait(false);
+                await subscribeCommand.AsValueTask().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
