@@ -1,4 +1,4 @@
-using Cysharp.Diagnostics;
+﻿using Cysharp.Diagnostics;
 using MessagePack;
 using System;
 using System.Collections.Generic;
@@ -264,7 +264,7 @@ public class PubSubTest : IClassFixture<NatsServerFixture>, IDisposable
             Url = "localhost:" + 14250,
         });
 
-        await Assert.ThrowsAsync<Exception>(async () => await connection1.ConnectAsync());
+        await Assert.ThrowsAsync<NatsException>(async () => await connection1.ConnectAsync());
     }
 
     static readonly int[] seed1 = { 24, 45, 99, 41, 98, 7, 81, 8, 26, 56 };
