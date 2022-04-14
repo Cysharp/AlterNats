@@ -5,7 +5,6 @@ using System.Text;
 
 namespace AlterNats;
 
-// TODO:when connection failed, can not receive response so Dispose All.
 internal sealed class RequestResponseManager : IDisposable
 {
     internal readonly NatsConnection connection;
@@ -18,7 +17,7 @@ internal sealed class RequestResponseManager : IDisposable
     bool isDisposed;
     // ID: Handler
     Dictionary<int, (Type responseType, object handler)> responseBoxes = new();
-    IDisposable? globalSubscription; // TODO:when connection failed, null and reuse???
+    IDisposable? globalSubscription;
 
     public RequestResponseManager(NatsConnection connection, ObjectPool pool)
     {
@@ -63,6 +62,7 @@ internal sealed class RequestResponseManager : IDisposable
         lock (gate)
         {
             if (isDisposed) throw new NatsException("Connection is closed.");
+            if (globalSubscription == null) throw new NatsException("Connection is disconnected.");
             responseBoxes.Add(id, (typeof(TResponse), command));
         }
 
@@ -85,12 +85,9 @@ internal sealed class RequestResponseManager : IDisposable
         ResponsePublisher.PublishResponse(box.responseType, connection.Options, buffer, box.handler);
     }
 
-    public void Dispose()
+    // when socket disconnected, can not receive new one so set cancel all waiting promise.
+    public void Reset()
     {
-        if (isDisposed) return;
-        isDisposed = true;
-        cancellationTokenSource.Cancel();
-
         lock (gate)
         {
             foreach (var item in responseBoxes)
@@ -101,7 +98,18 @@ internal sealed class RequestResponseManager : IDisposable
                 }
             }
             responseBoxes.Clear();
+
+            globalSubscription?.Dispose();
+            globalSubscription = null;
         }
     }
 
+    public void Dispose()
+    {
+        if (isDisposed) return;
+        isDisposed = true;
+        cancellationTokenSource.Cancel();
+
+        Reset();
+    }
 }

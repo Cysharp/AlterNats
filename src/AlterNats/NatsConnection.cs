@@ -223,6 +223,7 @@ public class NatsConnection : IAsyncDisposable
                 this.waitForOpenConnection.TrySetCanceled();
                 this.waitForOpenConnection = new TaskCompletionSource();
                 this.pingTimerCancellationTokenSource?.Cancel();
+                this.requestResponseManager.Reset();
             }
 
             // Cleanup current reader/writer
