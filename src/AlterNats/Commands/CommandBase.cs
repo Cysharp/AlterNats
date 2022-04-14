@@ -36,6 +36,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSel
     public ref TSelf? NextNode => ref next;
 
     ObjectPool? objectPool;
+    bool canceled;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected static bool TryRent(ObjectPool pool, [NotNullWhen(true)] out TSelf? self)
@@ -69,6 +70,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSel
 
     public void SetCanceled(CancellationToken cancellationToken)
     {
+        canceled = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
         {
             state.self.core.SetException(new OperationCanceledException(state.cancellationToken));
@@ -95,7 +97,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSel
             Reset();
             var p = objectPool;
             objectPool = null;
-            if (p != null)
+            if (p != null && !canceled) // canceled object don't return pool to avoid call SetResult/Exception after await
             {
                 p.Return(Unsafe.As<TSelf>(this));
             }
@@ -133,6 +135,7 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IObjectPo
     ManualResetValueTaskSourceCore<TResponse> core;
     TResponse? response;
     ObjectPool? objectPool;
+    bool canceled;
 
     void ICommand.Return(ObjectPool pool)
     {
@@ -164,6 +167,7 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IObjectPo
 
     public void SetCanceled(CancellationToken cancellationToken)
     {
+        canceled = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
         {
             state.self.core.SetException(new OperationCanceledException(state.cancellationToken));
@@ -191,7 +195,7 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IObjectPo
             Reset();
             var p = objectPool;
             objectPool = null;
-            if (p != null)
+            if (p != null && !canceled) // canceled object don't return pool to avoid call SetResult/Exception after await
             {
                 p.Return(Unsafe.As<TSelf>(this));
             }

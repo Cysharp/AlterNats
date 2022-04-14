@@ -462,6 +462,18 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
+    /// <summary>Publish empty message.</summary>
+    public ValueTask PublishAsync(string key)
+    {
+        return PublishAsync(key, Array.Empty<byte>());
+    }
+
+    /// <summary>Publish empty message.</summary>
+    public ValueTask PublishAsync(in NatsKey key)
+    {
+        return PublishAsync(key, Array.Empty<byte>());
+    }
+
     public ValueTask PublishAsync<T>(string key, T value)
     {
         return PublishAsync<T>(new NatsKey(key, true), value);
@@ -499,6 +511,18 @@ public class NatsConnection : IAsyncDisposable
     public ValueTask PublishAsync(string key, ReadOnlyMemory<byte> value)
     {
         return PublishAsync(new NatsKey(key, true), value);
+    }
+
+    /// <summary>Publish empty message.</summary>
+    public void PostPublish(in NatsKey key)
+    {
+        PostPublish(key, Array.Empty<byte>());
+    }
+
+    /// <summary>Publish empty message.</summary>
+    public void PostPublish(string key)
+    {
+        PostPublish(key, Array.Empty<byte>());
     }
 
     public void PostPublish<T>(in NatsKey key, T value)
@@ -727,6 +751,16 @@ public class NatsConnection : IAsyncDisposable
                 return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
             });
         }
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action handler)
+    {
+        return SubscribeAsync<byte[]>(key, _ => handler());
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync(string key, Action handler)
+    {
+        return SubscribeAsync<byte[]>(key, _ => handler());
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
