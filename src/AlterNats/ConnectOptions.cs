@@ -70,10 +70,10 @@ public sealed record ConnectOptions
     public bool? AccountNew { get; init; }
 
     [JsonPropertyName("headers")]
-    public bool Headers { get; init; } = true; // if set to false and NoResponders failed CONNECT command and closed connection from server
+    public bool Headers { get; init; } = false;
 
     [JsonPropertyName("no_responders")]
-    public bool NoResponders { get; init; } = true;
+    public bool NoResponders { get; init; } = false;
 
     static string GetAssemblyVersion()
     {

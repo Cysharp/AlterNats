@@ -27,7 +27,7 @@ public sealed class NatsConnectionPool : IAsyncDisposable
         connections = new NatsConnection[poolSize];
         for (int i = 0; i < connections.Length; i++)
         {
-            connections[i] = new NatsConnection();
+            connections[i] = new NatsConnection(options);
         }
     }
 

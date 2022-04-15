@@ -39,7 +39,13 @@ public class Program
             //LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
             Serializer = new MessagePackNatsSerializer(),
             ConnectTimeout = TimeSpan.FromSeconds(1),
-            ConnectOptions = ConnectOptions.Default with { Echo = true, Verbose = false, AuthToken = "s3cr3t" },
+            ConnectOptions = ConnectOptions.Default with
+            {
+                Echo = true,
+                Verbose = false,
+                AuthToken = "s3cr3t",
+                Name = "hogemoge!"
+            },
             PingInterval = TimeSpan.Zero,
         };
 
@@ -47,14 +53,7 @@ public class Program
         var connection = new NatsConnection(options);
 
 
-        for (int i = 0; i < 100; i++)
-        {
-            connection.PostPublish("foo");
-        }
-
-        await connection.FlushAsync();
-        Console.WriteLine("Flushed");
-
+        await connection.ConnectAsync();
 
         Console.ReadLine();
     }

@@ -14,27 +14,27 @@ public sealed class NatsShardingConnection
         }
     }
 
-    public ShadringNatsCommand GetCommand(in NatsKey key)
+    public ShardringNatsCommand GetCommand(in NatsKey key)
     {
         var hash = key.GetHashCode();
         var pool = pools[hash % pools.Length];
-        return new ShadringNatsCommand(pool.GetConnection(), key);
+        return new ShardringNatsCommand(pool.GetConnection(), key);
     }
 
-    public ShadringNatsCommand GetCommand(string key)
+    public ShardringNatsCommand GetCommand(string key)
     {
         var hash = key.GetHashCode();
         var pool = pools[hash % pools.Length];
-        return new ShadringNatsCommand(pool.GetConnection(), new NatsKey(key, true));
+        return new ShardringNatsCommand(pool.GetConnection(), new NatsKey(key, true));
     }
 }
 
-public readonly struct ShadringNatsCommand
+public readonly struct ShardringNatsCommand
 {
     readonly NatsConnection connection;
     readonly NatsKey key;
 
-    public ShadringNatsCommand(NatsConnection connection, NatsKey key)
+    public ShardringNatsCommand(NatsConnection connection, NatsKey key)
     {
         this.connection = connection;
         this.key = key;
