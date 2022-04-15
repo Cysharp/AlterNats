@@ -117,37 +117,30 @@ internal sealed class RequestPublisher<TRequest, TResponse>
 
         try
         {
-            static void Publish(NatsConnection connection, TRequest? value, in NatsKey replyTo, object callback)
-            {
-                TResponse response = default!;
-                try
-                {
-                    response = ((Func<TRequest, TResponse>)callback)(value!);
-                }
-                catch (Exception ex)
-                {
-                    try
-                    {
-                        connection.Options.LoggerFactory.CreateLogger<RequestPublisher<TRequest, TResponse>>().LogError(ex, "Error occured during request handler.");
-                    }
-                    catch { }
-                    connection.PostPublish(replyTo); // send empty when error
-                    return;
-                }
-
-                connection.PostPublish(replyTo, response); // send response.
-            }
-
             if (!connection.Options.UseThreadPoolCallback)
             {
-                Publish(connection, value, replyTo, callback);
+                if (callback is Func<TRequest, TResponse> func)
+                {
+                    PublishSync(connection, value, replyTo, func);
+                }
+                else if (callback is Func<TRequest, Task<TResponse>> asyncFunc)
+                {
+                    PublishAsync(connection, value, replyTo, asyncFunc);
+                }
             }
             else
             {
                 ThreadPool.UnsafeQueueUserWorkItem(static state =>
                 {
                     var (connection, value, replyTo, callback) = state;
-                    Publish(connection, value, replyTo, callback);
+                    if (callback is Func<TRequest, TResponse> func)
+                    {
+                        PublishSync(connection, value, replyTo, func);
+                    }
+                    else if (callback is Func<TRequest, Task<TResponse>> asyncFunc)
+                    {
+                        PublishAsync(connection, value, replyTo, asyncFunc);
+                    }
                 }, (connection, value, replyTo, callback), false);
             }
         }
@@ -158,6 +151,48 @@ internal sealed class RequestPublisher<TRequest, TResponse>
                 connection.Options.LoggerFactory.CreateLogger<RequestPublisher<TRequest, TResponse>>().LogError(ex, "Error occured during request handler.");
             }
             catch { }
+        }
+
+        static void PublishSync(NatsConnection connection, TRequest? value, in NatsKey replyTo, Func<TRequest, TResponse> callback)
+        {
+            TResponse response = default!;
+            try
+            {
+                response = callback.Invoke(value!);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    connection.Options.LoggerFactory.CreateLogger<RequestPublisher<TRequest, TResponse>>().LogError(ex, "Error occured during request handler.");
+                }
+                catch { }
+                connection.PostPublish(replyTo); // send empty when error
+                return;
+            }
+
+            connection.PostPublish(replyTo, response); // send response.
+        }
+
+        static async void PublishAsync(NatsConnection connection, TRequest? value, NatsKey replyTo, Func<TRequest, Task<TResponse>> callback)
+        {
+            TResponse response = default!;
+            try
+            {
+                response = await callback.Invoke(value!).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    connection.Options.LoggerFactory.CreateLogger<RequestPublisher<TRequest, TResponse>>().LogError(ex, "Error occured during request handler.");
+                }
+                catch { }
+                connection.PostPublish(replyTo); // send empty when error
+                return;
+            }
+
+            connection.PostPublish(replyTo, response); // send response.
         }
     }
 }
