@@ -823,7 +823,7 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -838,7 +838,7 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, string queueGroup, Action<T> handler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Action<T> handler)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -853,7 +853,7 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -888,7 +888,7 @@ public class NatsConnection : IAsyncDisposable
         }
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
