@@ -349,7 +349,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         var jsonReader = new Utf8JsonReader(buffer.Slice(5));
 
         var serverInfo = JsonSerializer.Deserialize<ServerInfo>(ref jsonReader);
-        if (serverInfo == null) throw new InvalidOperationException(""); // TODO:NatsException
+        if (serverInfo == null) throw new NatsException("Can not parse ServerInfo.");
         return serverInfo;
     }
 

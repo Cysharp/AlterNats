@@ -79,7 +79,7 @@ internal sealed class MessagePublisher<T>
                 {
                     if (callback != null)
                     {
-                        var item = ThreadPoolWorkItem<T>.Create((Action<T?>)callback, value);
+                        var item = ThreadPoolWorkItem<T>.Create((Action<T?>)callback, value, options!.LoggerFactory);
                         ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
                     }
                 }
@@ -147,7 +147,7 @@ internal sealed class ByteArrayMessagePublisher
                 {
                     if (callback != null)
                     {
-                        var item = ThreadPoolWorkItem<byte[]>.Create((Action<byte[]?>)callback, value);
+                        var item = ThreadPoolWorkItem<byte[]>.Create((Action<byte[]?>)callback, value, options!.LoggerFactory);
                         ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
                     }
                 }
@@ -215,7 +215,7 @@ internal sealed class ReadOnlyMemoryMessagePublisher
                 {
                     if (callback != null)
                     {
-                        var item = ThreadPoolWorkItem<ReadOnlyMemory<byte>>.Create((Action<ReadOnlyMemory<byte>>)callback, value);
+                        var item = ThreadPoolWorkItem<ReadOnlyMemory<byte>>.Create((Action<ReadOnlyMemory<byte>>)callback, value, options!.LoggerFactory);
                         ThreadPool.UnsafeQueueUserWorkItem(item, preferLocal: false);
                     }
                 }

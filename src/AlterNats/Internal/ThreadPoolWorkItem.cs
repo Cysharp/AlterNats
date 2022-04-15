@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
 namespace AlterNats.Internal;
@@ -12,13 +13,14 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
 
     Action<T?>? continuation;
     T? value;
+    ILoggerFactory? loggerFactory;
 
     ThreadPoolWorkItem()
     {
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ThreadPoolWorkItem<T> Create(Action<T?> continuation, T? value)
+    public static ThreadPoolWorkItem<T> Create(Action<T?> continuation, T? value, ILoggerFactory loggerFactory)
     {
         if (!pool.TryDequeue(out var item))
         {
@@ -27,6 +29,8 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
 
         item.continuation = continuation;
         item.value = value;
+        item.loggerFactory = loggerFactory;
+
         return item;
     }
 
@@ -35,8 +39,10 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
     {
         var call = continuation;
         var v = value;
+        var factory = loggerFactory;
         continuation = null;
         value = default;
+        loggerFactory = null;
         if (call != null)
         {
             pool.Enqueue(this);
@@ -45,9 +51,12 @@ internal sealed class ThreadPoolWorkItem<T> : IThreadPoolWorkItem
             {
                 call.Invoke(v);
             }
-            catch
+            catch (Exception ex)
             {
-                // TODO: do nanika(logging?)
+                if (loggerFactory != null)
+                {
+                    loggerFactory.CreateLogger<ThreadPoolWorkItem<T>>().LogError(ex, "Error occured during execute callback on ThreadPool.");
+                }
             }
         }
     }

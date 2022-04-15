@@ -96,7 +96,7 @@ internal sealed class ProtocolWriter
 
         if (!Utf8Formatter.TryFormat(payload.Length, writableSpan.Slice(offset), out var written))
         {
-            throw new Exception(); // TODO: exception
+            throw new NatsException("Can not format integer.");
         }
         offset += written;
 
@@ -173,7 +173,7 @@ internal sealed class ProtocolWriter
         payloadLengthSpan.Fill((byte)' ');
         if (!Utf8Formatter.TryFormat(payloadLength, payloadLengthSpan, out var written))
         {
-            throw new Exception(); // TODO: exception
+            throw new NatsException("Can not format integer.");
         }
 
         WriteConstant(CommandConstants.NewLine);
@@ -235,7 +235,7 @@ internal sealed class ProtocolWriter
         payloadLengthSpan.Fill((byte)' ');
         if (!Utf8Formatter.TryFormat(payloadLength, payloadLengthSpan, out written))
         {
-            throw new Exception(); // TODO: exception
+            throw new NatsException("Can not format integer.");
         }
 
         WriteConstant(CommandConstants.NewLine);
@@ -288,7 +288,7 @@ internal sealed class ProtocolWriter
 
         if (!Utf8Formatter.TryFormat(subscriptionId, writableSpan.Slice(offset), out var written))
         {
-            throw new Exception(); // TODO: exception
+            throw new NatsException("Can not format integer.");
         }
         offset += written;
 
@@ -314,7 +314,7 @@ internal sealed class ProtocolWriter
 
         if (!Utf8Formatter.TryFormat(subscriptionId, writableSpan.Slice(offset), out var written))
         {
-            throw new Exception(); // TODO: exception
+            throw new NatsException("Can not format integer.");
         }
         offset += written;
 
@@ -324,7 +324,7 @@ internal sealed class ProtocolWriter
             offset += 1;
             if (!Utf8Formatter.TryFormat(maxMessages.Value, writableSpan.Slice(offset), out written))
             {
-                throw new Exception(); // TODO: exception
+                throw new NatsException("Can not format integer.");
             }
             offset += written;
         }
