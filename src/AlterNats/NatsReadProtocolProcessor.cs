@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Collections.Concurrent;
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -138,7 +137,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                             }
                             else
                             {
-                                payloadSlice = payloadSlice.Slice(0, payloadLength); // TODO:reduce slice count?
+                                payloadSlice = payloadSlice.Slice(0, payloadLength);
                             }
 
                             buffer = buffer.Slice(buffer.GetPosition(2, payloadSlice.End)); // payload + \r\n
@@ -325,8 +324,20 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         }
         else
         {
-            // TODO:reaches invalid line, log warn and try to get newline and go to nextloop.
-            throw new NotImplementedException();
+            // reaches invalid line, log warn and try to get newline and go to nextloop.
+            logger.LogWarning("reaches invalid line.");
+            var position = buffer.PositionOf((byte)'\n');
+            if (position == null)
+            {
+                socketReader.AdvanceTo(buffer.Start);
+                var newBuffer = await socketReader.ReadUntilReceiveNewLineAsync().ConfigureAwait(false);
+                var newPosition = newBuffer.PositionOf((byte)'\n');
+                return newBuffer.Slice(newBuffer.GetPosition(1, newPosition!.Value));
+            }
+            else
+            {
+                return buffer.Slice(buffer.GetPosition(1, position.Value));
+            }
         }
     }
 
