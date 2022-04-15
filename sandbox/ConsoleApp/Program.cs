@@ -46,20 +46,14 @@ public class Program
 
         var connection = new NatsConnection(options);
 
-        
 
-        await connection.SubscribeRequestAsync("foo", (byte[] x) =>
+        for (int i = 0; i < 100; i++)
         {
-            if (x.Length == 1) throw new Exception("FOO");
-            return new byte[] { 1, 10, 100 };
-        });
+            connection.PostPublish("foo");
+        }
 
-
-
-        var r1 = await connection.RequestAsync<byte[], byte[]>("foo", new byte[] { 200 });
-        Console.WriteLine("OK" + r1);
-
-
+        await connection.FlushAsync();
+        Console.WriteLine("Flushed");
 
 
         Console.ReadLine();

@@ -67,7 +67,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                     try
                     {
                         var memory = tempBuffer.WrittenMemory;
-                        do
+                        while (memory.Length > 0)
                         {
                             stopwatch.Restart();
                             var sent = await socket.SendAsync(memory, SocketFlags.None).ConfigureAwait(false);
@@ -77,7 +77,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                                 logger.LogTrace("Socket.SendAsync. Size: {0} BatchSize: {1} Elapsed: {2}ms", sent, count, stopwatch.Elapsed.TotalMilliseconds);
                             }
                             memory = memory.Slice(sent);
-                        } while (memory.Length > 0);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -128,7 +128,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                         // SendAsync(ReadOnlyMemory) is very efficient, internally using AwaitableAsyncSocketEventArgs
                         // should use cancellation token?, currently no, wait for flush complete.
                         var memory = bufferWriter.WrittenMemory;
-                        do
+                        while (memory.Length != 0)
                         {
                             stopwatch.Restart();
                             var sent = await socket.SendAsync(memory, SocketFlags.None).ConfigureAwait(false);
@@ -144,7 +144,6 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
 
                             memory = memory.Slice(sent);
                         }
-                        while (memory.Length != 0);
 
                         bufferWriter.Reset();
                         foreach (var item in promiseList)

@@ -608,9 +608,12 @@ public class NatsConnection : IAsyncDisposable
         }
         else
         {
-            var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            commandWriter.TryWrite(command);
-            return command.AsValueTask();
+            return WithConnectAsync(values, static (self, values) =>
+            {
+                var command = AsyncPublishBatchCommand<T>.Create(self.pool, values, self.Options.Serializer);
+                self.commandWriter.TryWrite(command);
+                return command.AsValueTask();
+            });
         }
     }
 
@@ -933,6 +936,25 @@ public class NatsConnection : IAsyncDisposable
         return new NatsObservable<T>(this, key);
     }
 
+    public ValueTask FlushAsync()
+    {
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            var command = AsyncFlushCommand.Create(pool);
+            commandWriter.TryWrite(command);
+            return command.AsValueTask();
+        }
+        else
+        {
+            return WithConnectAsync(static self =>
+            {
+                var command = AsyncFlushCommand.Create(self.pool);
+                self.commandWriter.TryWrite(command);
+                return command.AsValueTask();
+            });
+        }
+    }
+
     // internal commands.
 
     internal void PostPong()
@@ -1052,6 +1074,12 @@ public class NatsConnection : IAsyncDisposable
             return;
         }
         core(this, item1, item2);
+    }
+
+    async ValueTask WithConnectAsync(Func<NatsConnection, ValueTask> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        await coreAsync(this).ConfigureAwait(false);
     }
 
     async ValueTask WithConnectAsync<T1>(T1 item1, Func<NatsConnection, T1, ValueTask> coreAsync)
