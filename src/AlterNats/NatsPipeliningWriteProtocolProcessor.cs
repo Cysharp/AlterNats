@@ -97,7 +97,11 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                 }
             }
 
-            // main writer loop,
+            // restore promise(command is exist in bufferWriter) when enter from reconnecting.
+            promiseList.AddRange(state.PendingPromises);
+            state.PendingPromises.Clear();
+
+            // main writer loop
             while ((bufferWriter.WrittenCount != 0) || (await reader.WaitToReadAsync(cancellationTokenSource.Token).ConfigureAwait(false)))
             {
                 try
@@ -150,28 +154,15 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                         {
                             item.SetResult();
                         }
+                        promiseList.Clear();
                     }
                     catch (Exception ex) // may receive from socket.SendAsync
                     {
-                        // TODO: require reset bufferWriter and copy memory if size is not matched.
-
-                        // TODO:for reconnect, don't signal task
-                        foreach (var promise in promiseList)
-                        {
-                            promise.SetException(ex);
-                        }
-
-
-
-
+                        // when error, command is dequeued and written buffer is still exists in state.BufferWriter
+                        // store current pending promises to state.
+                        state.PendingPromises.AddRange(promiseList);
                         socket.SignalDisconnected(ex);
                         return; // when socket closed, finish writeloop.
-
-                    }
-                    finally
-                    {
-                        // TODO:if not signal, don't clear
-                        promiseList.Clear();
                     }
                 }
                 catch (Exception ex)
@@ -208,7 +199,6 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     {
         if (Interlocked.Increment(ref disposed) == 1)
         {
-            // TODO:state
             cancellationTokenSource.Cancel();
             await writeLoop.ConfigureAwait(false); // wait for drain writer
         }

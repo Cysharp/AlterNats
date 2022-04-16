@@ -23,6 +23,7 @@ internal sealed class WriterState
     public Channel<ICommand> CommandBuffer { get; }
     public NatsOptions Options { get; }
     public List<ICommand> PriorityCommands { get; }
+    public List<IPromise> PendingPromises { get; }
 
     public WriterState(NatsOptions options)
     {
@@ -35,6 +36,7 @@ internal sealed class WriterState
             SingleReader = true,
         });
         PriorityCommands = new List<ICommand>();
+        PendingPromises = new List<IPromise>();
     }
 }
 
@@ -406,10 +408,6 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         pingCommand.SetCanceled(CancellationToken.None);
     }
 
-    
-
-    // internal commands.
-
     internal void PostPong()
     {
         commandWriter.TryWrite(PongCommand.Create(pool));
@@ -459,7 +457,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             isDisposed = true;
             // Dispose Writer(Drain prepared queues -> write to socket)
             // Close Socket
-            // Dispose Reader(Drain read buffers)
+            // Dispose Reader(Drain read buffers but no reads more)
             if (socketWriter != null)
             {
                 await socketWriter.DisposeAsync().ConfigureAwait(false);
@@ -475,6 +473,10 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             if (pingTimerCancellationTokenSource != null)
             {
                 pingTimerCancellationTokenSource.Cancel();
+            }
+            foreach (var item in writerState.PendingPromises)
+            {
+                item.SetCanceled(CancellationToken.None);
             }
             subscriptionManager.Dispose();
             requestResponseManager.Dispose();
