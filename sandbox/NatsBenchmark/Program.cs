@@ -57,7 +57,7 @@ namespace NatsBenchmark
                 .AddLogging(x =>
                 {
                     x.ClearProviders();
-                    x.SetMinimumLevel(LogLevel.Trace);
+                    x.SetMinimumLevel(LogLevel.Information);
                     x.AddZLoggerConsole();
                 })
                 .BuildServiceProvider();
@@ -300,13 +300,13 @@ namespace NatsBenchmark
             subConn.DisposeAsync().AsTask().Wait();
         }
 
-        void RunPubSubAlterNatsBatchRaw(string testName, long testCount, long testSize, bool disableShow = false)
+        void RunPubSubAlterNatsBatchRaw(string testName, long testCount, long testSize, int batchSize = 1000, bool disableShow = false)
         {
             var provider = new ServiceCollection()
                 .AddLogging(x =>
                 {
                     x.ClearProviders();
-                    x.SetMinimumLevel(LogLevel.Trace);
+                    x.SetMinimumLevel(LogLevel.Information);
                     x.AddZLoggerConsole();
                 })
                 .BuildServiceProvider();
@@ -316,7 +316,7 @@ namespace NatsBenchmark
             var logger = loggerFactory.CreateLogger<ILogger<Benchmark>>();
             var options = NatsOptions.Default with
             {
-                // LoggerFactory = loggerFactory,
+                //LoggerFactory = loggerFactory,
                 UseThreadPoolCallback = false,
                 ConnectOptions = ConnectOptions.Default with { Echo = false, Verbose = false }
             };
@@ -353,14 +353,15 @@ namespace NatsBenchmark
             }).AsTask().Result;
 
 
-            var command = new AlterNats.Commands.DirectWriteCommand(BuildCommand(testSize), 1000);
+            var command = new AlterNats.Commands.DirectWriteCommand(BuildCommand(testSize), batchSize);
 
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
+
             Stopwatch sw = Stopwatch.StartNew();
 
-            var to = testCount / 1000;
+            var to = testCount / batchSize;
             for (int i = 0; i < to; i++)
             {
                 pubConn.PostDirectWrite(command);
@@ -753,17 +754,25 @@ namespace NatsBenchmark
             //ProfilingRunPubSubAlterNatsAsync("AlterNatsProfiling", 10000000, 0);
 
             //
-            RunPubSubAlterNatsBatchRaw("AlterNats", 10000000, 8, disableShow: true); // warmup
-            RunPubSubAlterNatsBatchRaw("AlterNats8b_Opt", 10000000, 8);
+            //RunPubSubAlterNatsBatchRaw("AlterNats", 10000000, 8, disableShow: true); // warmup
+            //RunPubSubAlterNatsBatchRaw("AlterNats", 500000, 1024 * 4, disableShow: true); // warmup
+            //RunPubSubAlterNatsBatchRaw("AlterNats", 100000, 1024 * 8, disableShow: true); // warmup
+            //RunPubSubAlterNatsBatchRaw("AlterNats8b_Opt", 10000000, 8);
+            //RunPubSubAlterNatsBatchRaw("AlterNats4k_Opt", 500000, 1024 * 4);
+            RunPubSubAlterNatsBatchRaw("AlterNats8k_Opt", 100000, 1024 * 8, batchSize: 10, disableShow: true);
+            RunPubSubAlterNatsBatchRaw("AlterNats8k_Opt", 100000, 1024 * 8, batchSize: 10);
+            RunPubSubAlterNats("AlterNats8k", 100000, 1024 * 8, disableShow: true);
+            RunPubSubAlterNats("AlterNats8k", 100000, 1024 * 8);
 
-            RunPubSubAlterNats("AlterNats8b", 10000000, 8, disableShow: true);
-            RunPubSubAlterNats("AlterNats8b", 10000000, 8);
+            //RunPubSubAlterNats("AlterNats8b", 10000000, 8, disableShow: true);
+            //RunPubSubAlterNats("AlterNats8b", 10000000, 8);
 
 
             //runPubSubVector3("PubSubVector3", 10000000);
             //runPubSub("PubSubNo", 10000000, 0);
-            runPubSub("PubSub8b", 10000000, 8);
-            runPubSub("PubSub8b", 10000000, 8);
+            //runPubSub("PubSub8b", 10000000, 8);
+
+            //runPubSub("PubSub8b", 10000000, 8);
 
 
             //runPubSub("PubSub32b", 10000000, 32);
@@ -772,7 +781,7 @@ namespace NatsBenchmark
             //runPubSub("PubSub512b", 500000, 512);
             //runPubSub("PubSub1k", 500000, 1024);
             //runPubSub("PubSub4k", 500000, 1024 * 4);
-            //runPubSub("PubSub8k", 100000, 1024 * 8);
+            runPubSub("PubSub8k", 100000, 1024 * 8);
 
 
 
