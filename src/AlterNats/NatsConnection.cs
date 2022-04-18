@@ -64,6 +64,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     public NatsConnectionState ConnectionState { get; private set; }
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
 
+    // events
+    public event Action? ConnectionDisconnected;
+    public event Action? ConnectionOpened;
+    public event Action? ReconnectFailed;
+
     public NatsConnection()
         : this(NatsOptions.Default)
     {
@@ -205,6 +210,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             StartPingTimerAsync(pingTimerCancellationTokenSource.Token);
             this.waitForOpenConnection.TrySetResult();
             Task.Run(ReconnectLoopAsync);
+            ConnectionOpened?.Invoke();
         }
     }
 
@@ -216,6 +222,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             await socket!.WaitForClosed.ConfigureAwait(false);
 
             logger.LogTrace("Detect connection closed, start to cleanup current connection and start to reconnect.");
+            ConnectionDisconnected?.Invoke();
 
             lock (gate)
             {
@@ -337,6 +344,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 socketWriter = null;
                 socketReader = null;
 
+                ReconnectFailed?.Invoke();
                 await WaitWithJitterAsync().ConfigureAwait(false);
                 goto CONNECT_AGAIN;
             }
@@ -349,6 +357,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 StartPingTimerAsync(pingTimerCancellationTokenSource.Token);
                 this.waitForOpenConnection.TrySetResult();
                 Task.Run(ReconnectLoopAsync);
+                ConnectionOpened?.Invoke();
             }
         }
         catch
@@ -406,7 +415,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         pingCommand.SetCanceled(CancellationToken.None);
     }
 
-    
+
 
     // internal commands.
 
