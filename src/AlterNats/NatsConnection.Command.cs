@@ -14,11 +14,11 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            commandWriter.TryWrite(PingCommand.Create(pool));
+            EnqueueCommand(PingCommand.Create(pool));
         }
         else
         {
-            WithConnect(static self => self.commandWriter.TryWrite(PingCommand.Create(self.pool)));
+            WithConnect(static self => self.EnqueueCommand(PingCommand.Create(self.pool)));
         }
     }
 
@@ -30,7 +30,7 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPingCommand.Create(this, pool);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
             return command.AsValueTask();
         }
         else
@@ -38,7 +38,7 @@ public partial class NatsConnection : INatsCommand
             return WithConnectAsync(static self =>
             {
                 var command = AsyncPingCommand.Create(self, self.pool);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
                 return command.AsValueTask();
             });
         }
@@ -49,7 +49,7 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishCommand<T>.Create(pool, key, value, Options.Serializer);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
             return command.AsValueTask();
         }
         else
@@ -57,7 +57,7 @@ public partial class NatsConnection : INatsCommand
             return WithConnectAsync(key, value, static (self, k, v) =>
             {
                 var command = AsyncPublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
                 return command.AsValueTask();
             });
         }
@@ -95,7 +95,7 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishBytesCommand.Create(pool, key, value);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
             return command.AsValueTask();
         }
         else
@@ -103,7 +103,7 @@ public partial class NatsConnection : INatsCommand
             return WithConnectAsync(key, value, static (self, k, v) =>
             {
                 var command = AsyncPublishBytesCommand.Create(self.pool, k, v);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
                 return command.AsValueTask();
             });
         }
@@ -131,14 +131,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishCommand<T>.Create(pool, key, value, Options.Serializer);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
         }
         else
         {
             WithConnect(key, value, static (self, k, v) =>
             {
                 var command = PublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
             });
         }
     }
@@ -163,14 +163,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishBytesCommand.Create(pool, key, value);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
         }
         else
         {
             WithConnect(key, value, static (self, k, v) =>
             {
                 var command = PublishBytesCommand.Create(self.pool, k, v);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
             });
         }
     }
@@ -185,7 +185,7 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
             return command.AsValueTask();
         }
         else
@@ -193,7 +193,7 @@ public partial class NatsConnection : INatsCommand
             return WithConnectAsync(values, static (self, v) =>
             {
                 var command = AsyncPublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
                 return command.AsValueTask();
             });
         }
@@ -204,7 +204,7 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
             return command.AsValueTask();
         }
         else
@@ -212,7 +212,7 @@ public partial class NatsConnection : INatsCommand
             return WithConnectAsync(values, static (self, values) =>
             {
                 var command = AsyncPublishBatchCommand<T>.Create(self.pool, values, self.Options.Serializer);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
                 return command.AsValueTask();
             });
         }
@@ -223,14 +223,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
         }
         else
         {
             WithConnect(values, static (self, v) =>
             {
                 var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
             });
         }
     }
@@ -240,14 +240,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
         }
         else
         {
             WithConnect(values, static (self, v) =>
             {
                 var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
             });
         }
     }
@@ -256,13 +256,13 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            commandWriter.TryWrite(new DirectWriteCommand(protocol, repeatCount));
+            EnqueueCommand(new DirectWriteCommand(protocol, repeatCount));
         }
         else
         {
             WithConnect(protocol, repeatCount, static (self, protocol, repeatCount) =>
             {
-                self.commandWriter.TryWrite(new DirectWriteCommand(protocol, repeatCount));
+                self.EnqueueCommand(new DirectWriteCommand(protocol, repeatCount));
             });
         }
     }
@@ -271,13 +271,13 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            commandWriter.TryWrite(new DirectWriteCommand(protocol));
+            EnqueueCommand(new DirectWriteCommand(protocol));
         }
         else
         {
             WithConnect(protocol, static (self, protocol) =>
             {
-                self.commandWriter.TryWrite(new DirectWriteCommand(protocol));
+                self.EnqueueCommand(new DirectWriteCommand(protocol));
             });
         }
     }
@@ -286,13 +286,13 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
         }
         else
         {
             WithConnect(command, static (self, command) =>
             {
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
             });
         }
     }
@@ -542,7 +542,7 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncFlushCommand.Create(pool);
-            commandWriter.TryWrite(command);
+            EnqueueCommand(command);
             return command.AsValueTask();
         }
         else
@@ -550,7 +550,7 @@ public partial class NatsConnection : INatsCommand
             return WithConnectAsync(static self =>
             {
                 var command = AsyncFlushCommand.Create(self.pool);
-                self.commandWriter.TryWrite(command);
+                self.EnqueueCommand(command);
                 return command.AsValueTask();
             });
         }
