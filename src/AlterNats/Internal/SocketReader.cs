@@ -13,15 +13,17 @@ internal sealed class SocketReader
 
     Memory<byte> availableMemory;
     readonly int minimumBufferSize;
+    readonly ConnectionStatsCounter counter;
     readonly SeqeunceBuilder seqeunceBuilder = new SeqeunceBuilder();
     readonly Stopwatch stopwatch = new Stopwatch();
     readonly ILogger<SocketReader> logger;
     readonly bool isTraceLogging;
 
-    public SocketReader(TcpConnection socket, int minimumBufferSize, ILoggerFactory loggerFactory)
+    public SocketReader(TcpConnection socket, int minimumBufferSize, ConnectionStatsCounter counter, ILoggerFactory loggerFactory)
     {
         this.socket = socket;
         this.minimumBufferSize = minimumBufferSize;
+        this.counter = counter;
         this.logger = loggerFactory.CreateLogger<SocketReader>();
         this.isTraceLogging = logger.IsEnabled(LogLevel.Trace);
     }
@@ -62,6 +64,7 @@ internal sealed class SocketReader
                 throw ex;
             }
             totalRead += read;
+            counter.Add(ref counter.ReceivedBytes, read);
             seqeunceBuilder.Append(availableMemory.Slice(0, read));
             availableMemory = availableMemory.Slice(read);
         } while (totalRead < minimumSize);
@@ -104,6 +107,7 @@ internal sealed class SocketReader
                 throw ex;
             }
 
+            counter.Add(ref counter.ReceivedBytes, read);
             var appendMemory = availableMemory.Slice(0, read);
             seqeunceBuilder.Append(appendMemory);
             availableMemory = availableMemory.Slice(read);

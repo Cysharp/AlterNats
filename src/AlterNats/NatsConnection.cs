@@ -49,6 +49,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     readonly RequestResponseManager requestResponseManager;
     readonly ILogger<NatsConnection> logger;
     readonly ObjectPool pool;
+    internal readonly ConnectionStatsCounter counter; // allow to call from external sources
     internal readonly ReadOnlyMemory<byte> indBoxPrefix;
 
     int pongCount;
@@ -66,6 +67,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     public NatsConnectionState ConnectionState { get; private set; }
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
 
+    // events
+    public event Action? ConnectionDisconnected;
+    public event Action? ConnectionOpened;
+    public event Action? ReconnectFailed;
+
     public NatsConnection()
         : this(NatsOptions.Default)
     {
@@ -77,6 +83,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         this.pool = new ObjectPool(options.CommandPoolSize);
+        this.counter = new ConnectionStatsCounter();
         this.writerState = new WriterState(options);
         this.commandWriter = writerState.CommandBuffer.Writer;
         this.subscriptionManager = new SubscriptionManager(this);
@@ -118,6 +125,8 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             await InitialConnectAsync().ConfigureAwait(false);
         }
     }
+
+    public NatsStats GetStats() => counter.ToStats();
 
     async ValueTask InitialConnectAsync()
     {
@@ -207,6 +216,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             StartPingTimerAsync(pingTimerCancellationTokenSource.Token);
             this.waitForOpenConnection.TrySetResult();
             Task.Run(ReconnectLoopAsync);
+            ConnectionOpened?.Invoke();
         }
     }
 
@@ -218,6 +228,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             await socket!.WaitForClosed.ConfigureAwait(false);
 
             logger.LogTrace("Detect connection closed, start to cleanup current connection and start to reconnect.");
+            ConnectionDisconnected?.Invoke();
 
             lock (gate)
             {
@@ -338,7 +349,9 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 socket = null;
                 socketWriter = null;
                 socketReader = null;
+                writerState.PriorityCommands.Clear();
 
+                ReconnectFailed?.Invoke();
                 await WaitWithJitterAsync().ConfigureAwait(false);
                 goto CONNECT_AGAIN;
             }
@@ -351,6 +364,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 StartPingTimerAsync(pingTimerCancellationTokenSource.Token);
                 this.waitForOpenConnection.TrySetResult();
                 Task.Run(ReconnectLoopAsync);
+                ConnectionOpened?.Invoke();
             }
         }
         catch
@@ -408,26 +422,37 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         pingCommand.SetCanceled(CancellationToken.None);
     }
 
+    // internal commands.
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    void EnqueueCommand(ICommand command)
+    {
+        if (commandWriter.TryWrite(command))
+        {
+            counter.Increment(ref counter.PendingMessages);
+        }
+    }
+    
     internal void PostPong()
     {
-        commandWriter.TryWrite(PongCommand.Create(pool));
+        EnqueueCommand(PongCommand.Create(pool));
     }
 
     internal ValueTask SubscribeAsync(int subscriptionId, string subject, in NatsKey? queueGroup)
     {
         var command = AsyncSubscribeCommand.Create(pool, subscriptionId, new NatsKey(subject, true), queueGroup);
-        commandWriter.TryWrite(command);
+        EnqueueCommand(command);
         return command.AsValueTask();
     }
 
     internal void PostUnsubscribe(int subscriptionId)
     {
-        commandWriter.TryWrite(UnsubscribeCommand.Create(pool, subscriptionId));
+        EnqueueCommand(UnsubscribeCommand.Create(pool, subscriptionId));
     }
 
     internal void PostCommand(ICommand command)
     {
-        commandWriter.TryWrite(command);
+        EnqueueCommand(command);
     }
 
     internal void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
