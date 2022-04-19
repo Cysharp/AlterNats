@@ -76,7 +76,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
                         code = GetCode(buffer);
                     }
 
-                    connection.counter.Increment(ref connection.counter.ReceivedMessages);
+                    Interlocked.Increment(ref connection.counter.ReceivedMessages);
 
                     // Optimize for Msg parsing, Inline async code
                     if (code == ServerOpCodes.Msg)
@@ -328,7 +328,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
         {
             // reaches invalid line, log warn and try to get newline and go to nextloop.
             logger.LogWarning("reaches invalid line.");
-            connection.counter.Decrement(ref connection.counter.ReceivedMessages);
+            Interlocked.Decrement(ref connection.counter.ReceivedMessages);
 
             var position = buffer.PositionOf((byte)'\n');
             if (position == null)

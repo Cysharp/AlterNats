@@ -12,27 +12,13 @@ public readonly record struct NatsStats
 
 internal sealed class ConnectionStatsCounter
 {
+    // for operate Interlocked.Increment/Decrement/Add, expose field as public
     public long SentBytes;
     public long SentMessages;
     public long PendingMessages;
     public long ReceivedBytes;
     public long ReceivedMessages;
     public long SubscriptionCount;
-
-    public void Increment(ref long field)
-    {
-        Interlocked.Increment(ref field);
-    }
-
-    public void Decrement(ref long field)
-    {
-        Interlocked.Decrement(ref field);
-    }
-
-    public void Add(ref long field, long value)
-    {
-        Interlocked.Add(ref field, value);
-    }
 
     public NatsStats ToStats()
     {

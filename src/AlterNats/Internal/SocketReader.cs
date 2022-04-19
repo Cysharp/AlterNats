@@ -64,7 +64,7 @@ internal sealed class SocketReader
                 throw ex;
             }
             totalRead += read;
-            counter.Add(ref counter.ReceivedBytes, read);
+            Interlocked.Add(ref counter.ReceivedBytes, read);
             seqeunceBuilder.Append(availableMemory.Slice(0, read));
             availableMemory = availableMemory.Slice(read);
         } while (totalRead < minimumSize);
@@ -107,7 +107,7 @@ internal sealed class SocketReader
                 throw ex;
             }
 
-            counter.Add(ref counter.ReceivedBytes, read);
+            Interlocked.Add(ref counter.ReceivedBytes, read);
             var appendMemory = availableMemory.Slice(0, read);
             seqeunceBuilder.Append(appendMemory);
             availableMemory = availableMemory.Slice(read);

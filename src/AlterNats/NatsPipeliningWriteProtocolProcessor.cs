@@ -78,7 +78,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                             {
                                 logger.LogTrace("Socket.SendAsync. Size: {0} BatchSize: {1} Elapsed: {2}ms", sent, count, stopwatch.Elapsed.TotalMilliseconds);
                             }
-                            counter.Add(ref counter.SentBytes, sent);
+                            Interlocked.Add(ref counter.SentBytes, sent);
                             memory = memory.Slice(sent);
                         }
                     }
@@ -112,7 +112,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                     var count = 0;
                     while (bufferWriter.WrittenCount < writerBufferSize && reader.TryRead(out var command))
                     {
-                        counter.Decrement(ref counter.PendingMessages);
+                        Interlocked.Decrement(ref counter.PendingMessages);
 
                         if (command is IBatchCommand batch)
                         {
@@ -150,11 +150,11 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                             {
                                 throw new SocketClosedException(null);
                             }
-                            counter.Add(ref counter.SentBytes, sent);
+                            Interlocked.Add(ref counter.SentBytes, sent);
 
                             memory = memory.Slice(sent);
                         }
-                        counter.Add(ref counter.SentMessages, count);
+                        Interlocked.Add(ref counter.SentMessages, count);
 
                         bufferWriter.Reset();
                         foreach (var item in promiseList)

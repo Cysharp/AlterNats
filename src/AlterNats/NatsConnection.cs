@@ -429,7 +429,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     {
         if (commandWriter.TryWrite(command))
         {
-            counter.Increment(ref counter.PendingMessages);
+            Interlocked.Increment(ref counter.PendingMessages);
         }
     }
 

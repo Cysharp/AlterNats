@@ -303,7 +303,7 @@ internal sealed class RefCountSubscription
     {
         var id = Handlers.Add(handler);
         ReferenceCount++;
-        manager.connection.counter.Increment(ref manager.connection.counter.SubscriptionCount);
+        Interlocked.Increment(ref manager.connection.counter.SubscriptionCount);
         return id;
     }
 
@@ -313,7 +313,7 @@ internal sealed class RefCountSubscription
         {
             ReferenceCount--;
             Handlers.Remove(handlerId, false);
-            manager.connection.counter.Decrement(ref manager.connection.counter.SubscriptionCount);
+            Interlocked.Decrement(ref manager.connection.counter.SubscriptionCount);
             if (ReferenceCount == 0)
             {
                 manager.Remove(Key, SubscriptionId);

@@ -37,6 +37,14 @@ public sealed class NatsConnectionPool : IAsyncDisposable
         return connections[i % connections.Length];
     }
 
+    public IEnumerable<NatsConnection> GetConnections()
+    {
+        foreach (var item in connections)
+        {
+            yield return item;
+        }
+    }
+
     public INatsCommand GetCommand()
     {
         return GetConnection();

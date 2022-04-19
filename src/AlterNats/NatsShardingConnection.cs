@@ -14,6 +14,17 @@ public sealed class NatsShardingConnection
         }
     }
 
+    public IEnumerable<NatsConnection> GetConnections()
+    {
+        foreach (var item in pools)
+        {
+            foreach (var conn in item.GetConnections())
+            {
+                yield return conn;
+            }
+        }
+    }
+
     public ShardringNatsCommand GetCommand(in NatsKey key)
     {
         var hash = key.GetHashCode();
