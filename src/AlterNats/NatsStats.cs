@@ -12,9 +12,9 @@ public readonly record struct NatsStats
 
 internal sealed class ConnectionStatsCounter
 {
-    public long SentBytes; // TODO:write this
-    public long SentMessages; // TODO:write this
-    public long PendingMessages; // TODO:decrement after reader.TryRead
+    public long SentBytes;
+    public long SentMessages;
+    public long PendingMessages;
     public long ReceivedBytes;
     public long ReceivedMessages;
     public long SubscriptionCount;

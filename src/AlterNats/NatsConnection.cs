@@ -172,7 +172,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         // Run Reader/Writer LOOP start
         var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var waitForPongOrErrorSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool);
+        this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool, counter);
         this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal, waitForPongOrErrorSignal);
 
         try
@@ -319,7 +319,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 // Run Reader/Writer LOOP start
                 var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var waitForPongOrErrorSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool);
+                this.socketWriter = new NatsPipeliningWriteProtocolProcessor(socket, writerState, pool, counter);
                 this.socketReader = new NatsReadProtocolProcessor(socket, this, waitForInfoSignal, waitForPongOrErrorSignal);
 
                 await waitForInfoSignal.Task.ConfigureAwait(false);
@@ -432,7 +432,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             counter.Increment(ref counter.PendingMessages);
         }
     }
-    
+
     internal void PostPong()
     {
         EnqueueCommand(PongCommand.Create(pool));

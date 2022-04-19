@@ -12,6 +12,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     readonly TcpConnection socket;
     readonly WriterState state;
     readonly ObjectPool pool;
+    readonly ConnectionStatsCounter counter;
     readonly FixedArrayBufferWriter bufferWriter;
     readonly Channel<ICommand> channel;
     readonly NatsOptions options;
@@ -20,11 +21,12 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
     readonly CancellationTokenSource cancellationTokenSource;
     int disposed;
 
-    public NatsPipeliningWriteProtocolProcessor(TcpConnection socket, WriterState state, ObjectPool pool)
+    public NatsPipeliningWriteProtocolProcessor(TcpConnection socket, WriterState state, ObjectPool pool, ConnectionStatsCounter counter)
     {
         this.socket = socket;
         this.state = state;
         this.pool = pool;
+        this.counter = counter;
         this.bufferWriter = state.BufferWriter;
         this.channel = state.CommandBuffer;
         this.options = state.Options;
@@ -76,6 +78,7 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                             {
                                 logger.LogTrace("Socket.SendAsync. Size: {0} BatchSize: {1} Elapsed: {2}ms", sent, count, stopwatch.Elapsed.TotalMilliseconds);
                             }
+                            counter.Add(ref counter.SentBytes, sent);
                             memory = memory.Slice(sent);
                         }
                     }
@@ -109,6 +112,8 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                     var count = 0;
                     while (bufferWriter.WrittenCount < writerBufferSize && reader.TryRead(out var command))
                     {
+                        counter.Decrement(ref counter.PendingMessages);
+
                         if (command is IBatchCommand batch)
                         {
                             count += batch.Write(protocolWriter);
@@ -145,9 +150,11 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                             {
                                 throw new SocketClosedException(null);
                             }
+                            counter.Add(ref counter.SentBytes, sent);
 
                             memory = memory.Slice(sent);
                         }
+                        counter.Add(ref counter.SentMessages, count);
 
                         bufferWriter.Reset();
                         foreach (var item in promiseList)
