@@ -68,9 +68,9 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
 
     // events
-    public event Action? ConnectionDisconnected;
-    public event Action? ConnectionOpened;
-    public event Action? ReconnectFailed;
+    public event EventHandler<string>? ConnectionDisconnected;
+    public event EventHandler<string>? ConnectionOpened;
+    public event EventHandler<string>? ReconnectFailed;
 
     public NatsConnection()
         : this(NatsOptions.Default)
@@ -216,7 +216,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             StartPingTimer(pingTimerCancellationTokenSource.Token);
             this.waitForOpenConnection.TrySetResult();
             Task.Run(ReconnectLoop);
-            ConnectionOpened?.Invoke();
+            ConnectionOpened?.Invoke(this, url?.ToString() ?? "");
         }
     }
 
@@ -228,8 +228,6 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             await socket!.WaitForClosed.ConfigureAwait(false);
 
             logger.LogTrace("Detect connection closed, start to cleanup current connection and start to reconnect.");
-            ConnectionDisconnected?.Invoke();
-
             lock (gate)
             {
                 this.ConnectionState = NatsConnectionState.Reconnecting;
@@ -238,6 +236,9 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 this.pingTimerCancellationTokenSource?.Cancel();
                 this.requestResponseManager.Reset();
             }
+
+            // Invoke after state changed
+            ConnectionDisconnected?.Invoke(this, currentConnectUri?.ToString() ?? "");
 
             // Cleanup current reader/writer
             {
@@ -351,7 +352,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 socketReader = null;
                 writerState.PriorityCommands.Clear();
 
-                ReconnectFailed?.Invoke();
+                ReconnectFailed?.Invoke(this, url?.ToString() ?? "");
                 await WaitWithJitterAsync().ConfigureAwait(false);
                 goto CONNECT_AGAIN;
             }
@@ -364,7 +365,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 StartPingTimer(pingTimerCancellationTokenSource.Token);
                 this.waitForOpenConnection.TrySetResult();
                 Task.Run(ReconnectLoop);
-                ConnectionOpened?.Invoke();
+                ConnectionOpened?.Invoke(this, url?.ToString() ?? "");
             }
         }
         catch
