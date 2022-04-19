@@ -37,7 +37,7 @@ internal sealed class RequestResponseManager : IDisposable
 
     async ValueTask<RequestAsyncCommand<TRequest, TResponse?>> AddWithGlobalSubscribeAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
-        await asyncLock.WaitAsync(cancellationTokenSource.Token);
+        await asyncLock.WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
         try
         {
             if (globalSubscription == null)

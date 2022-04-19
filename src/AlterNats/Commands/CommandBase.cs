@@ -1,5 +1,6 @@
-﻿using AlterNats.Internal;
-using System.Collections.Concurrent;
+﻿#pragma warning disable VSTHRD200 // Use "Async" suffix for async methods
+
+using AlterNats.Internal;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks.Sources;
@@ -56,7 +57,6 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IObjectPoolNode<TSel
     public abstract void Write(ProtocolWriter writer);
 
     protected abstract void Reset();
-
 
     public ValueTask AsValueTask()
     {
@@ -148,7 +148,6 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IObjectPo
     public abstract void Write(ProtocolWriter writer);
 
     protected abstract void Reset();
-
 
     public ValueTask<TResponse> AsValueTask()
     {
