@@ -117,9 +117,9 @@ public class NatsServer : IAsyncDisposable
         return options with
         {
             LoggerFactory = new OutputHelperLoggerFactory(outputHelper),
-            ConnectTimeout = TimeSpan.FromSeconds(1),
-            ReconnectWait = TimeSpan.Zero, // no wait for reconnect
-            ReconnectJitter = TimeSpan.Zero,
+            //ConnectTimeout = TimeSpan.FromSeconds(1),
+            //ReconnectWait = TimeSpan.Zero,
+            //ReconnectJitter = TimeSpan.Zero,
             Url = $"localhost:{Port}"
         };
     }
