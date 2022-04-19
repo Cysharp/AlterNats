@@ -15,3 +15,14 @@ charset = utf-8-bom
 
 csharp_style_namespace_declarations = file_scoped
 dotnet_style_require_accessibility_modifiers = never
+
+# VSTHRD101: Avoid async void
+# VSTHRD101: Avoid unsupported async delegates
+dotnet_diagnostic.VSTHRD100.severity = none
+dotnet_diagnostic.VSTHRD101.severity = none
+
+# VSTHRD003: Avoid awaiting foreign Tasks
+dotnet_diagnostic.VSTHRD003.severity = none
+
+# VSTHRD111: Use ConfigureAwait(bool)
+dotnet_diagnostic.VSTHRD111.severity = error

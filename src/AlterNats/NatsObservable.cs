@@ -34,7 +34,7 @@ internal sealed class NatsObservable<T> : IObservable<T>
         {
             try
             {
-                taskDisposable = await task;
+                taskDisposable = await task.ConfigureAwait(false);
                 lock (gate)
                 {
                     if (disposed)

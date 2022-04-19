@@ -189,9 +189,9 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             // can not start reader/writer
             var uri = currentConnectUri;
 
-            await socketWriter!.DisposeAsync();
-            await socketReader!.DisposeAsync();
-            await socket!.DisposeAsync();
+            await socketWriter!.DisposeAsync().ConfigureAwait(false);
+            await socketReader!.DisposeAsync().ConfigureAwait(false);
+            await socket!.DisposeAsync().ConfigureAwait(false);
             socket = null;
             socketWriter = null;
             socketReader = null;
@@ -213,14 +213,14 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             logger.LogInformation("Connect succeed, NATS {0}:{1}", url?.Host, url?.Port);
             this.ConnectionState = NatsConnectionState.Open;
             this.pingTimerCancellationTokenSource = new CancellationTokenSource();
-            StartPingTimerAsync(pingTimerCancellationTokenSource.Token);
+            StartPingTimer(pingTimerCancellationTokenSource.Token);
             this.waitForOpenConnection.TrySetResult();
-            Task.Run(ReconnectLoopAsync);
+            Task.Run(ReconnectLoop);
             ConnectionOpened?.Invoke();
         }
     }
 
-    async void ReconnectLoopAsync()
+    async void ReconnectLoop()
     {
         try
         {
@@ -256,11 +256,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 });
 
                 // writer's internal buffer/channel is not thread-safe, must wait complete.
-                await socketWriter!.DisposeAsync();
+                await socketWriter!.DisposeAsync().ConfigureAwait(false);
             }
 
             // Dispose current and create new
-            await socket.DisposeAsync();
+            await socket.DisposeAsync().ConfigureAwait(false);
 
             NatsUri[] urls = Array.Empty<NatsUri>();
             if (Options.NoRandomize)
@@ -361,9 +361,9 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 logger.LogInformation("Connect succeed, NATS {0}:{1}", url.Host, url.Port);
                 this.ConnectionState = NatsConnectionState.Open;
                 this.pingTimerCancellationTokenSource = new CancellationTokenSource();
-                StartPingTimerAsync(pingTimerCancellationTokenSource.Token);
+                StartPingTimer(pingTimerCancellationTokenSource.Token);
                 this.waitForOpenConnection.TrySetResult();
-                Task.Run(ReconnectLoopAsync);
+                Task.Run(ReconnectLoop);
                 ConnectionOpened?.Invoke();
             }
         }
@@ -380,7 +380,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         await Task.Delay(waitTime).ConfigureAwait(false);
     }
 
-    async void StartPingTimerAsync(CancellationToken cancellationToken)
+    async void StartPingTimer(CancellationToken cancellationToken)
     {
         if (Options.PingInterval == TimeSpan.Zero) return;
 
@@ -489,7 +489,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             }
             if (socket != null)
             {
-                await socket.DisposeAsync();
+                await socket.DisposeAsync().ConfigureAwait(false);
             }
             if (socketReader != null)
             {
