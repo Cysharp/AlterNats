@@ -47,11 +47,15 @@ public class OutputHelperLoggerFactory : ILoggerFactory
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            testOutputHelper.WriteLine(formatter(state, exception));
-            if (exception != null)
+            try
             {
-                testOutputHelper.WriteLine(exception.ToString());
+                testOutputHelper.WriteLine(formatter(state, exception));
+                if (exception != null)
+                {
+                    testOutputHelper.WriteLine(exception.ToString());
+                }
             }
+            catch { }
         }
     }
 
