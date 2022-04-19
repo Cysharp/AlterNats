@@ -14,12 +14,10 @@ namespace AlterNats.Tests;
 public class PubSubTest : IDisposable
 {
     readonly ITestOutputHelper output;
-    readonly TimeSpan timeout;
 
     public PubSubTest(ITestOutputHelper output)
     {
         this.output = output;
-        this.timeout = TimeSpan.FromSeconds(5);
     }
 
     [Fact]
@@ -31,7 +29,7 @@ public class PubSubTest : IDisposable
         await using var pubConnection = server.CreateClientConnection();
 
         var key = new NatsKey(Guid.NewGuid().ToString("N"));
-        TaskCompletionSource signalComplete = new TaskCompletionSource();
+        var signalComplete = new WaitSignal();
 
         var list = new List<int>();
         await subConnection.SubscribeAsync<int>(key, x =>
@@ -40,7 +38,7 @@ public class PubSubTest : IDisposable
             list.Add(x);
             if (x == 9)
             {
-                signalComplete.SetResult();
+                signalComplete.Pulse();
             }
         });
 
@@ -49,15 +47,59 @@ public class PubSubTest : IDisposable
             await pubConnection.PublishAsync(key, i);
         }
 
-        await signalComplete.Task.WaitAsync(timeout);
+        await signalComplete;
 
         list.ShouldEqual(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
     }
 
     [Fact]
-    public async Task ReconnectTest()
+    public async Task ReconnectSingleTest()
+    {
+        await using var server = new NatsServer(output);
+        var key = Guid.NewGuid().ToString();
+
+        await using var subConnection = server.CreateClientConnection();
+        await using var pubConnection = server.CreateClientConnection();
+
+        var list = new List<int>();
+        var waitForReceiveFinish = new WaitSignal();
+        var d = await subConnection.SubscribeAsync(key, (int x) =>
+        {
+            list.Add(x);
+            if (x == 500)
+            {
+                waitForReceiveFinish.Pulse();
+            }
+        });
+
+        await pubConnection.PublishAsync(key, 100);
+        await pubConnection.PublishAsync(key, 200);
+        await pubConnection.PublishAsync(key, 300);
+
+        var disconnectSignal = subConnection.ConnectionDisconnectedAsAwaitable();
+        await server.DisposeAsync();
+        await disconnectSignal;
+
+        // start new nats server on same port
+        await using var newServer = new NatsServer(output, server.Port);
+        await subConnection.ConnectAsync(); // wait open again
+
+        await pubConnection.PublishAsync(key, 400);
+        await pubConnection.PublishAsync(key, 500);
+        d.Dispose();
+        await pubConnection.PublishAsync(key, 600);
+        await waitForReceiveFinish;
+
+        list.ShouldEqual(100, 200, 300, 400, 500);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ReconnectClusterTest()
     {
         await using var cluster = new NatsCluster(output);
+        await Task.Delay(TimeSpan.FromSeconds(5)); // wait for cluster completely connected.
+
+        var key = Guid.NewGuid().ToString();
 
         await using var connection1 = cluster.Server1.CreateClientConnection();
         await using var connection2 = cluster.Server2.CreateClientConnection();
@@ -67,19 +109,50 @@ public class PubSubTest : IDisposable
         await connection2.ConnectAsync();
         await connection3.ConnectAsync();
 
-        var disocnnectSignal = new TaskCompletionSource();
-        connection1.ConnectionDisconnected += (_, __) =>
+        output.WriteLine("Server1 ClientConnectUrls:" + String.Join(", ", connection1.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
+        output.WriteLine("Server2 ClientConnectUrls:" + String.Join(", ", connection2.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
+        output.WriteLine("Server3 ClientConnectUrls:" + String.Join(", ", connection3.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
+
+        connection1.ServerInfo!.ClientConnectUrls!.Select(x => new NatsUri(x).Port).Distinct().Count().ShouldBe(3);
+        connection2.ServerInfo!.ClientConnectUrls!.Select(x => new NatsUri(x).Port).Distinct().Count().ShouldBe(3);
+        connection3.ServerInfo!.ClientConnectUrls!.Select(x => new NatsUri(x).Port).Distinct().Count().ShouldBe(3);
+
+        var list = new List<int>();
+        var waitForReceive300 = new WaitSignal();
+        var waitForReceiveFinish = new WaitSignal();
+        var d = await connection1.SubscribeAsync(key, (int x) =>
         {
-            disocnnectSignal.SetResult();
-        };
+            output.WriteLine("RECEIVED: " + x);
+            list.Add(x);
+            if (x == 300)
+            {
+                waitForReceive300.Pulse();
+            }
+            if (x == 500)
+            {
+                waitForReceiveFinish.Pulse();
+            }
+        });
+
+        await connection2.PublishAsync(key, 100);
+        await connection2.PublishAsync(key, 200);
+        await connection2.PublishAsync(key, 300);
+        await waitForReceive300;
+
+        var disconnectSignal = connection1.ConnectionDisconnectedAsAwaitable(); // register disconnect before kill
 
         output.WriteLine($"TRY KILL SERVER1 Port:{cluster.Server1.Port}");
-        await cluster.Server1.DisposeAsync();
-        await disocnnectSignal.Task.WaitAsync(timeout);
+        await cluster.Server1.DisposeAsync(); // process kill
+        await disconnectSignal;
 
         await connection1.ConnectAsync(); // wait for reconnect complete.
 
         connection1.ServerInfo!.Port.Should().BeOneOf(cluster.Server2.Port, cluster.Server3.Port);
+
+        await connection2.PublishAsync(key, 400);
+        await connection2.PublishAsync(key, 500);
+        await waitForReceiveFinish;
+        list.ShouldEqual(100, 200, 300, 400, 500);
     }
 
 

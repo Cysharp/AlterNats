@@ -1,10 +1,6 @@
 ﻿using Cysharp.Diagnostics;
-using System;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit.Abstractions;
 
 namespace AlterNats.Tests;
 
@@ -15,17 +11,28 @@ public class NatsServer : IAsyncDisposable
 
     readonly CancellationTokenSource cancellationTokenSource = new();
     readonly ITestOutputHelper outputHelper;
-    readonly Task process;
+    readonly Task<string[]> processOut;
+    readonly Task<string[]> processErr;
 
     public int Port { get; }
 
     bool isDisposed;
 
     public NatsServer(ITestOutputHelper outputHelper, string argument = "")
+        : this(outputHelper, Random.Shared.Next(5000, 8000), argument)
+    {
+    }
+
+    public NatsServer(ITestOutputHelper outputHelper, int port, string argument = "")
     {
         this.outputHelper = outputHelper;
-        this.Port = Random.Shared.Next(5000, 6000);
-        this.process = ProcessX.StartAsync($"{natsServerPath} -p {Port} {argument}".Trim()).WaitAsync(cancellationTokenSource.Token);
+        this.Port = port;
+        var cmd = $"{natsServerPath} -p {Port} {argument}".Trim();
+        outputHelper.WriteLine(cmd);
+        var (p, stdout, stderror) = ProcessX.GetDualAsyncEnumerable(cmd);
+
+        this.processOut = EnumerteWithLogsAsync(stdout, cancellationTokenSource.Token);
+        this.processErr = EnumerteWithLogsAsync(stderror, cancellationTokenSource.Token);
 
         // Check for start server
         Task.Run(async () =>
@@ -47,6 +54,15 @@ public class NatsServer : IAsyncDisposable
             }
         }).Wait(5000); // timeout
 
+        if (this.processOut.IsFaulted)
+        {
+            this.processOut.GetAwaiter().GetResult(); // throw exception
+        }
+        if (this.processErr.IsFaulted)
+        {
+            this.processErr.GetAwaiter().GetResult(); // throw exception
+        }
+
         outputHelper.WriteLine("OK to Process Start, Port:" + Port);
     }
 
@@ -59,10 +75,34 @@ public class NatsServer : IAsyncDisposable
             cancellationTokenSource.Dispose();
             try
             {
-                await process; // wait for process exit.
+                var processLogs = await processErr; // wait for process exit, nats output info to stderror
+                if (processLogs.Length != 0)
+                {
+                    outputHelper.WriteLine("Process Logs of " + Port);
+                    foreach (var item in processLogs)
+                    {
+                        outputHelper.WriteLine(item);
+                    }
+                }
             }
             catch (OperationCanceledException) { }
         }
+    }
+
+    async Task<string[]> EnumerteWithLogsAsync(ProcessAsyncEnumerable enumerable, CancellationToken cancellationToken)
+    {
+        var l = new List<string>();
+        try
+        {
+            await foreach (var item in enumerable.WithCancellation(cancellationToken))
+            {
+                l.Add(item);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        return l.ToArray();
     }
 
     public NatsConnection CreateClientConnection() => CreateClientConnection(NatsOptions.Default);
@@ -77,6 +117,9 @@ public class NatsServer : IAsyncDisposable
         return options with
         {
             LoggerFactory = new OutputHelperLoggerFactory(outputHelper),
+            ConnectTimeout = TimeSpan.FromSeconds(1),
+            ReconnectWait = TimeSpan.Zero, // no wait for reconnect
+            ReconnectJitter = TimeSpan.Zero,
             Url = $"localhost:{Port}"
         };
     }
@@ -92,14 +135,14 @@ public class NatsCluster : IAsyncDisposable
 
     public NatsCluster(ITestOutputHelper outputHelper)
     {
-        var Port1 = Random.Shared.Next(10000, 11000);
-        var Port2 = Random.Shared.Next(10000, 11000);
-        var Port3 = Random.Shared.Next(10000, 11000);
+        var Port1 = Random.Shared.Next(10000, 13000);
+        var Port2 = Random.Shared.Next(10000, 13000);
+        var Port3 = Random.Shared.Next(10000, 13000);
 
         this.outputHelper = outputHelper;
-        this.Server1 = new NatsServer(outputHelper, $"--cluster_name test-cluster -cluster nats://localhost:{Port1}");
-        this.Server2 = new NatsServer(outputHelper, $"--cluster_name test-cluster -cluster nats://localhost:{Port2} -routes nats://localhost:{Port1}");
-        this.Server3 = new NatsServer(outputHelper, $"--cluster_name test-cluster -cluster nats://localhost:{Port3} -routes nats://localhost:{Port1}");
+        this.Server1 = new NatsServer(outputHelper, $"--cluster_name test-cluster -cluster nats://localhost:{Port1} -routes nats://localhost:{Port2},nats://localhost:{Port3}");
+        this.Server2 = new NatsServer(outputHelper, $"--cluster_name test-cluster -cluster nats://localhost:{Port2} -routes nats://localhost:{Port1},nats://localhost:{Port3}");
+        this.Server3 = new NatsServer(outputHelper, $"--cluster_name test-cluster -cluster nats://localhost:{Port3} -routes nats://localhost:{Port1},nats://localhost:{Port2}");
     }
 
     public async ValueTask DisposeAsync()

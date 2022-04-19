@@ -368,8 +368,10 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 ConnectionOpened?.Invoke(this, url?.ToString() ?? "");
             }
         }
-        catch
+        catch (Exception ex)
         {
+            if (ex is OperationCanceledException) return;
+            logger.LogError(ex, "Unknown error, loop stopped and connection is invalid state.");
         }
     }
 
@@ -377,8 +379,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     {
         var jitter = Random.Shared.NextDouble() * Options.ReconnectJitter.TotalMilliseconds;
         var waitTime = Options.ReconnectWait + TimeSpan.FromMilliseconds(jitter);
-        logger.LogTrace("Wait {0}ms to reconnect.", waitTime.TotalMilliseconds);
-        await Task.Delay(waitTime).ConfigureAwait(false);
+        if (waitTime != TimeSpan.Zero)
+        {
+            logger.LogTrace("Wait {0}ms to reconnect.", waitTime.TotalMilliseconds);
+            await Task.Delay(waitTime).ConfigureAwait(false);
+        }
     }
 
     async void StartPingTimer(CancellationToken cancellationToken)
@@ -481,6 +486,8 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         if (!isDisposed)
         {
             isDisposed = true;
+            logger.Log(LogLevel.Information, "Disposing connection.");
+
             // Dispose Writer(Drain prepared queues -> write to socket)
             // Close Socket
             // Dispose Reader(Drain read buffers but no reads more)

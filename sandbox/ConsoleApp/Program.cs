@@ -1,9 +1,11 @@
 ﻿using AlterNats;
 using AlterNats.Commands;
+using Cysharp.Diagnostics;
 using MessagePack;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
+using System.Runtime.InteropServices;
 using System.Text;
 using ZLogger;
 
@@ -20,42 +22,66 @@ public class FooResponse
 
 public class Program
 {
+    static readonly string ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
+    static readonly string natsServerPath = $"../../../../../tools/nats-server{ext}";
+
     public static async Task Main()
     {
-        var provider = new ServiceCollection()
-            .AddLogging(x =>
-            {
-                x.ClearProviders();
-                x.SetMinimumLevel(LogLevel.Trace);
-                x.AddZLoggerConsole();
-            })
-            .BuildServiceProvider();
+        //var provider = new ServiceCollection()
+        //    .AddLogging(x =>
+        //    {
+        //        x.ClearProviders();
+        //        x.SetMinimumLevel(LogLevel.Trace);
+        //        x.AddZLoggerConsole();
+        //    })
+        //    .BuildServiceProvider();
 
-        var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+        //var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
 
-        var options = NatsOptions.Default with
+        //var options = NatsOptions.Default with
+        //{
+        //    LoggerFactory = loggerFactory,
+        //    //LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
+        //    Serializer = new MessagePackNatsSerializer(),
+        //    ConnectTimeout = TimeSpan.FromSeconds(1),
+        //    ConnectOptions = ConnectOptions.Default with
+        //    {
+        //        Echo = true,
+        //        Verbose = false,
+        //        AuthToken = "s3cr3t",
+        //        Name = "hogemoge!"
+        //    },
+        //    PingInterval = TimeSpan.Zero,
+        //};
+
+
+        //var connection = new NatsConnection(options);
+
+        await Task.Yield();
+        //await connection.ConnectAsync();
+
+        //Console.ReadLine();
+
+        var cmd = $"{natsServerPath} -p {4501}";
+        var (p, stdout, stderror) = ProcessX.GetDualAsyncEnumerable(cmd);
+
+        var t1 = Task.Run(async () =>
         {
-            LoggerFactory = loggerFactory,
-            //LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
-            Serializer = new MessagePackNatsSerializer(),
-            ConnectTimeout = TimeSpan.FromSeconds(1),
-            ConnectOptions = ConnectOptions.Default with
+            await foreach (var item in stdout)
             {
-                Echo = true,
-                Verbose = false,
-                AuthToken = "s3cr3t",
-                Name = "hogemoge!"
-            },
-            PingInterval = TimeSpan.Zero,
-        };
+                Console.WriteLine("STDOUT:" + item);
+            }
+        });
 
+        var t2 = Task.Run(async () =>
+        {
+            await foreach (var item in stderror)
+            {
+                Console.WriteLine("STDERROR:" + item);
+            }
+        });
 
-        var connection = new NatsConnection(options);
-
-
-        await connection.ConnectAsync();
-
-        Console.ReadLine();
+        Task.WaitAll(t1, t2);
     }
 
     //static void CalcCommandPushPop(NatsKey key, INatsSerializer serializer)

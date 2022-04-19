@@ -28,7 +28,7 @@ internal sealed class NatsUri : IEquatable<NatsUri>
 
     public override string ToString()
     {
-        return uri.ToString();
+        return uri.ToString().Trim('/');
     }
 
     public override int GetHashCode()
