@@ -1,7 +1,7 @@
 ﻿using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 
-namespace AlterNats;
+namespace AlterNats.Internal;
 
 internal sealed class SocketClosedException : Exception
 {

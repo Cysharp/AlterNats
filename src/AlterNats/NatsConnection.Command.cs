@@ -3,6 +3,7 @@ using AlterNats.Internal;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Channels;
 
@@ -297,24 +298,44 @@ public partial class NatsConnection : INatsCommand
         }
     }
 
-    public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request)
+    [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    public async ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default)
     {
-        if (ConnectionState == NatsConnectionState.Open)
+        var timer = CancellationTimerPool.Rent(pool);
+        var linkedToken = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(timer.Token, cancellationToken)
+            : null;
+        try
         {
-            return requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request);
-        }
-        else
-        {
-            return WithConnectAsync(key, request, static (self, key, request) =>
+            var token = (linkedToken != null) ? linkedToken.Token : timer.Token;
+
+            RequestAsyncCommand<TRequest, TResponse?> command;
+            if (ConnectionState == NatsConnectionState.Open)
             {
-                return self.requestResponseManager.AddAsync<TRequest, TResponse>(key, self.indBoxPrefix, request);
-            });
+                command = await requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request, token).ConfigureAwait(false);
+            }
+            else
+            {
+                command = await WithConnectAsync(key, request, token, static (self, key, request, token) =>
+                {
+                    return self.requestResponseManager.AddAsync<TRequest, TResponse>(key, self.indBoxPrefix, request, token);
+                }).ConfigureAwait(false);
+            }
+
+            timer.CancelAfter(Options.RequestTimeout);
+
+            return await command.AsValueTask().ConfigureAwait(false);
+        }
+        finally
+        {
+            linkedToken?.Dispose();
+            timer.Return(pool);
         }
     }
 
-    public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request)
+    public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request, CancellationToken cancellationToken = default)
     {
-        return RequestAsync<TRequest, TResponse>(new NatsKey(key, true), request);
+        return RequestAsync<TRequest, TResponse>(new NatsKey(key, true), request, cancellationToken);
     }
 
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> requestHandler)

@@ -37,8 +37,8 @@ public interface INatsCommand
     ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler);
     ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Action<T> handler);
     ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler);
-    ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(in NatsKey key, TRequest request);
-    ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request);
+    ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default);
+    ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request, CancellationToken cancellationToken = default);
     ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action handler);
     ValueTask<IDisposable> SubscribeAsync(string key, Action handler);
     ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler);

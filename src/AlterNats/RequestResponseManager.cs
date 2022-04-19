@@ -25,17 +25,17 @@ internal sealed class RequestResponseManager : IDisposable
         this.pool = pool;
     }
 
-    public ValueTask<TResponse?> AddAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request)
+    public ValueTask<RequestAsyncCommand<TRequest, TResponse?>> AddAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         if (globalSubscription == null)
         {
-            return AddWithGlobalSubscribeAsync<TRequest, TResponse>(key, inBoxPrefix, request);
+            return AddWithGlobalSubscribeAsync<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken);
         }
 
-        return AddAsyncCore<TRequest, TResponse>(key, inBoxPrefix, request);
+        return new ValueTask<RequestAsyncCommand<TRequest, TResponse?>>(AddAsyncCore<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken));
     }
 
-    async ValueTask<TResponse?> AddWithGlobalSubscribeAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request)
+    async ValueTask<RequestAsyncCommand<TRequest, TResponse?>> AddWithGlobalSubscribeAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         await asyncLock.WaitAsync(cancellationTokenSource.Token);
         try
@@ -51,13 +51,13 @@ internal sealed class RequestResponseManager : IDisposable
             asyncLock.Release();
         }
 
-        return await AddAsyncCore<TRequest, TResponse>(key, inBoxPrefix, request).ConfigureAwait(false);
+        return AddAsyncCore<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken);
     }
 
-    ValueTask<TResponse?> AddAsyncCore<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request)
+    RequestAsyncCommand<TRequest, TResponse?> AddAsyncCore<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         var id = Interlocked.Increment(ref requestId);
-        var command = RequestAsyncCommand<TRequest, TResponse?>.Create(pool, key, inBoxPrefix, id, request, connection.Options.Serializer);
+        var command = RequestAsyncCommand<TRequest, TResponse?>.Create(pool, key, inBoxPrefix, id, request, connection.Options.Serializer, cancellationToken, this);
 
         lock (gate)
         {
@@ -67,7 +67,7 @@ internal sealed class RequestResponseManager : IDisposable
         }
 
         connection.PostCommand(command);
-        return command.AsValueTask();
+        return command;
     }
 
 
@@ -83,6 +83,14 @@ internal sealed class RequestResponseManager : IDisposable
         }
 
         ResponsePublisher.PublishResponse(box.responseType, connection.Options, buffer, box.handler);
+    }
+
+    public bool Remove(int id)
+    {
+        lock (gate)
+        {
+            return responseBoxes.Remove(id, out _);
+        }
     }
 
     // when socket disconnected, can not receive new one so set cancel all waiting promise.

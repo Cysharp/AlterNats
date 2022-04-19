@@ -23,6 +23,7 @@ namespace AlterNats;
 /// <param name="ReconnectJitter"></param>
 /// <param name="ConnectTimeout"></param>
 /// <param name="CommandPoolSize"></param>
+/// <param name="RequestTimeout"></param>
 public sealed record NatsOptions
 (
     string Url,
@@ -39,7 +40,8 @@ public sealed record NatsOptions
     TimeSpan ReconnectWait,
     TimeSpan ReconnectJitter,
     TimeSpan ConnectTimeout,
-    int CommandPoolSize
+    int CommandPoolSize,
+    TimeSpan RequestTimeout
 )
 {
     public static NatsOptions Default = new NatsOptions(
@@ -57,7 +59,8 @@ public sealed record NatsOptions
         ReconnectWait: TimeSpan.FromSeconds(2),
         ReconnectJitter: TimeSpan.FromMilliseconds(100),
         ConnectTimeout: TimeSpan.FromSeconds(2),
-        CommandPoolSize: 256
+        CommandPoolSize: 256,
+        RequestTimeout: TimeSpan.FromMinutes(1)
     );
 
     internal NatsUri[] GetSeedUris()
