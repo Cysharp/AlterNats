@@ -11,7 +11,7 @@ public class WaitSignal
     public Task Task => tcs.Task;
 
     public WaitSignal()
-        : this(TimeSpan.FromSeconds(5))
+        : this(TimeSpan.FromSeconds(10))
     {
     }
 
