@@ -62,10 +62,15 @@ public class PubSubTest : IDisposable
         await using var pubConnection = server.CreateClientConnection();
 
         var list = new List<int>();
+        var waitForReceive300 = new WaitSignal();
         var waitForReceiveFinish = new WaitSignal();
         var d = await subConnection.SubscribeAsync(key, (int x) =>
         {
             list.Add(x);
+            if (x == 300)
+            {
+                waitForReceive300.Pulse();
+            }
             if (x == 500)
             {
                 waitForReceiveFinish.Pulse();
@@ -76,13 +81,18 @@ public class PubSubTest : IDisposable
         await pubConnection.PublishAsync(key, 200);
         await pubConnection.PublishAsync(key, 300);
 
-        var disconnectSignal = subConnection.ConnectionDisconnectedAsAwaitable();
-        await server.DisposeAsync();
-        await disconnectSignal;
+        await waitForReceive300;
+
+        var disconnectSignal1 = subConnection.ConnectionDisconnectedAsAwaitable();
+        var disconnectSignal2 = pubConnection.ConnectionDisconnectedAsAwaitable();
+        await server.DisposeAsync(); // disconnect server
+        await disconnectSignal1;
+        await disconnectSignal2;
 
         // start new nats server on same port
         await using var newServer = new NatsServer(output, server.Port);
         await subConnection.ConnectAsync(); // wait open again
+        await pubConnection.ConnectAsync(); // wait open again
 
         await pubConnection.PublishAsync(key, 400);
         await pubConnection.PublishAsync(key, 500);

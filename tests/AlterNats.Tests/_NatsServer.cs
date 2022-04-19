@@ -28,7 +28,7 @@ public class NatsServer : IAsyncDisposable
         this.outputHelper = outputHelper;
         this.Port = port;
         var cmd = $"{natsServerPath} -p {Port} {argument}".Trim();
-        outputHelper.WriteLine(cmd);
+        outputHelper.WriteLine("ProcessStart: " + cmd);
         var (p, stdout, stderror) = ProcessX.GetDualAsyncEnumerable(cmd);
 
         this.processOut = EnumerteWithLogsAsync(stdout, cancellationTokenSource.Token);
