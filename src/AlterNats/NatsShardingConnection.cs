@@ -1,4 +1,8 @@
-﻿namespace AlterNats;
+﻿using System.Buffers.Binary;
+using System.IO.Hashing;
+using System.Runtime.CompilerServices;
+
+namespace AlterNats;
 
 public sealed class NatsShardingConnection : IAsyncDisposable
 {
@@ -28,7 +32,7 @@ public sealed class NatsShardingConnection : IAsyncDisposable
     public ShardringNatsCommand GetCommand(in NatsKey key)
     {
         Validate(key.Key);
-        var i = GetHashIndex(key.GetHashCode());
+        var i = GetHashIndex(key.Key);
         var pool = pools[i];
         return new ShardringNatsCommand(pool.GetConnection(), key);
     }
@@ -36,15 +40,20 @@ public sealed class NatsShardingConnection : IAsyncDisposable
     public ShardringNatsCommand GetCommand(string key)
     {
         Validate(key);
-        var i = GetHashIndex(key.GetHashCode());
+        var i = GetHashIndex(key);
         var pool = pools[i];
         return new ShardringNatsCommand(pool.GetConnection(), new NatsKey(key, true));
     }
 
-    int GetHashIndex(int seed)
+    int GetHashIndex(string key)
     {
-        if (seed == int.MinValue) seed++; // int.MinValue can't call Abs
-        return Math.Abs(seed) % pools.Length;
+        var source = System.Runtime.InteropServices.MemoryMarshal.AsBytes(key.AsSpan());
+        Span<byte> destination = stackalloc byte[4];
+        XxHash32.TryHash(source, destination, out var _);
+
+        var hash = BinaryPrimitives.ReadInt32LittleEndian(destination);
+        if (hash == int.MinValue) hash++; // int.MinValue can't call Abs
+        return Math.Abs(hash) % pools.Length;
     }
 
     void Validate(string key)
