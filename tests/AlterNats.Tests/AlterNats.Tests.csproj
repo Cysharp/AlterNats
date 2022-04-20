@@ -6,6 +6,7 @@
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn);CS8002</NoWarn>
         <ImplicitUsings>enable</ImplicitUsings>
+        <RunSettingsFilePath>$(MSBuildProjectDirectory)\test.runsettings</RunSettingsFilePath>
     </PropertyGroup>
 
     <ItemGroup>

@@ -49,6 +49,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     readonly RequestResponseManager requestResponseManager;
     readonly ILogger<NatsConnection> logger;
     readonly ObjectPool pool;
+    readonly string name;
     internal readonly ConnectionStatsCounter counter; // allow to call from external sources
     internal readonly ReadOnlyMemory<byte> indBoxPrefix;
 
@@ -83,6 +84,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         this.pool = new ObjectPool(options.CommandPoolSize);
+        this.name = options.ConnectOptions.Name ?? "";
         this.counter = new ConnectionStatsCounter();
         this.writerState = new WriterState(options);
         this.commandWriter = writerState.CommandBuffer.Writer;
@@ -210,7 +212,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         lock (gate)
         {
             var url = currentConnectUri;
-            logger.LogInformation("Connect succeed, NATS {0}:{1}", url?.Host, url?.Port);
+            logger.LogInformation("Connect succeed {0}, NATS {1}:{2}", name, url?.Host, url?.Port);
             this.ConnectionState = NatsConnectionState.Open;
             this.pingTimerCancellationTokenSource = new CancellationTokenSource();
             StartPingTimer(pingTimerCancellationTokenSource.Token);
@@ -227,7 +229,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             // If dispose this client, WaitForClosed throws OpeationCanceledException so stop reconnect-loop correctly.
             await socket!.WaitForClosed.ConfigureAwait(false);
 
-            logger.LogTrace("Detect connection closed, start to cleanup current connection and start to reconnect.");
+            logger.LogTrace($"Detect connection {name} closed, start to cleanup current connection and start to reconnect.");
             lock (gate)
             {
                 this.ConnectionState = NatsConnectionState.Reconnecting;
@@ -359,7 +361,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
 
             lock (gate)
             {
-                logger.LogInformation("Connect succeed, NATS {0}:{1}", url.Host, url.Port);
+                logger.LogInformation("Connect succeed {0}, NATS {1}:{2}", name, url.Host, url.Port);
                 this.ConnectionState = NatsConnectionState.Open;
                 this.pingTimerCancellationTokenSource = new CancellationTokenSource();
                 StartPingTimer(pingTimerCancellationTokenSource.Token);
@@ -486,7 +488,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         if (!isDisposed)
         {
             isDisposed = true;
-            logger.Log(LogLevel.Information, "Disposing connection.");
+            logger.Log(LogLevel.Information, $"Disposing connection {name}.");
 
             // Dispose Writer(Drain prepared queues -> write to socket)
             // Close Socket

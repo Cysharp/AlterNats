@@ -1,6 +1,6 @@
 ﻿namespace AlterNats;
 
-public sealed class NatsShardingConnection
+public sealed class NatsShardingConnection : IAsyncDisposable
 {
     readonly NatsConnectionPool[] pools;
 
@@ -8,7 +8,7 @@ public sealed class NatsShardingConnection
     {
         poolSize = Math.Max(1, poolSize);
         pools = new NatsConnectionPool[urls.Length];
-        for (int i = 0; i < poolSize; i++)
+        for (int i = 0; i < urls.Length; i++)
         {
             pools[i] = new NatsConnectionPool(poolSize, options with { Url = urls[i] });
         }
@@ -27,16 +27,40 @@ public sealed class NatsShardingConnection
 
     public ShardringNatsCommand GetCommand(in NatsKey key)
     {
-        var hash = key.GetHashCode();
-        var pool = pools[hash % pools.Length];
+        Validate(key.Key);
+        var i = GetHashIndex(key.GetHashCode());
+        var pool = pools[i];
         return new ShardringNatsCommand(pool.GetConnection(), key);
     }
 
     public ShardringNatsCommand GetCommand(string key)
     {
-        var hash = key.GetHashCode();
-        var pool = pools[hash % pools.Length];
+        Validate(key);
+        var i = GetHashIndex(key.GetHashCode());
+        var pool = pools[i];
         return new ShardringNatsCommand(pool.GetConnection(), new NatsKey(key, true));
+    }
+
+    int GetHashIndex(int seed)
+    {
+        if (seed == int.MinValue) seed++; // int.MinValue can't call Abs
+        return Math.Abs(seed) % pools.Length;
+    }
+
+    void Validate(string key)
+    {
+        if (key.AsSpan().IndexOfAny('*', '>') != -1)
+        {
+            throw new ArgumentException($"Wild card is not supported in sharding connection. Key:{key}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var item in pools)
+        {
+            await item.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
 
@@ -50,6 +74,8 @@ public readonly struct ShardringNatsCommand
         this.connection = connection;
         this.key = key;
     }
+
+    public NatsConnection GetConnection() => connection;
 
     public IObservable<T> AsObservable<T>() => connection.AsObservable<T>(key);
     public ValueTask FlushAsync() => connection.FlushAsync();

@@ -112,6 +112,13 @@ public class NatsServer : IAsyncDisposable
         return new NatsConnection(ClientOptions(options));
     }
 
+    public NatsConnectionPool CreatePooledClientConnection() => CreatePooledClientConnection(NatsOptions.Default);
+
+    public NatsConnectionPool CreatePooledClientConnection(NatsOptions options)
+    {
+        return new NatsConnectionPool(4, ClientOptions(options));
+    }
+
     public NatsOptions ClientOptions(NatsOptions options)
     {
         return options with

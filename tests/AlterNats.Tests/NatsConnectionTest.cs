@@ -41,6 +41,7 @@ public partial class NatsConnectionTest
                 signalComplete.Pulse();
             }
         });
+        await subConnection.PingAsync(); // wait for subscribe complete
 
         for (int i = 0; i < 10; i++)
         {
@@ -75,8 +76,7 @@ public partial class NatsConnectionTest
                 actual.Add(x);
                 if (x.Id == 30) signalComplete.Pulse();
             });
-
-            await Task.Delay(100);
+            await subConnection.PingAsync(); // wait for subscribe complete
 
             var one = new SampleClass(10, "foo");
             var two = new SampleClass(20, "bar");
@@ -140,6 +140,7 @@ public partial class NatsConnectionTest
         var waitForReceiveFinish = new WaitSignal();
         var d = await subConnection.SubscribeAsync(key, (int x) =>
         {
+            output.WriteLine("RECEIVED: " + x);
             list.Add(x);
             if (x == 300)
             {
@@ -150,6 +151,7 @@ public partial class NatsConnectionTest
                 waitForReceiveFinish.Pulse();
             }
         });
+        await subConnection.PingAsync(); // wait for subscribe complete
 
         await pubConnection.PublishAsync(key, 100);
         await pubConnection.PublishAsync(key, 200);
@@ -217,6 +219,7 @@ public partial class NatsConnectionTest
                 waitForReceiveFinish.Pulse();
             }
         });
+        await connection1.PingAsync(); // wait for subscribe complete
 
         await connection2.PublishAsync(key, 100);
         await connection2.PublishAsync(key, 200);

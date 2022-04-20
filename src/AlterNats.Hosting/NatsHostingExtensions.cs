@@ -2,7 +2,7 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
-namespace AlterNats.Hosting;
+namespace AlterNats;
 
 public static class NatsHostingExtensions
 {
@@ -10,10 +10,6 @@ public static class NatsHostingExtensions
     /// Add NatsConnection/Pool to ServiceCollection. When poolSize = 1, registered `NatsConnection` and `INatsCommand` as singleton.
     /// Others, registered `NatsConnectionPool` as singleton, `NatsConnection` and `INatsCommand` as transient(get from pool).
     /// </summary>
-    /// <param name="services"></param>
-    /// <param name="poolSize"></param>
-    /// <param name="configureOptions"></param>
-    /// <returns></returns>
     public static IServiceCollection AddNats(this IServiceCollection services, int poolSize = 1, Func<NatsOptions, NatsOptions>? configureOptions = null)
     {
         poolSize = Math.Max(poolSize, 1);
