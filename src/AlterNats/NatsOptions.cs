@@ -49,7 +49,7 @@ public sealed record NatsOptions
         ConnectOptions: ConnectOptions.Default,
         Serializer: new JsonNatsSerializer(new JsonSerializerOptions() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),
         LoggerFactory: NullLoggerFactory.Instance,
-        WriterBufferSize: 32767,
+        WriterBufferSize: 65534, // 32767
         ReaderBufferSize: 1048576,
         UseThreadPoolCallback: false,
         InboxPrefix: "_INBOX.",
