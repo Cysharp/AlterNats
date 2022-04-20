@@ -134,6 +134,8 @@ public partial class NatsConnectionTest
 
         await using var subConnection = server.CreateClientConnection();
         await using var pubConnection = server.CreateClientConnection();
+        await subConnection.ConnectAsync(); // wait open
+        await pubConnection.ConnectAsync(); // wait open
 
         var list = new List<int>();
         var waitForReceive300 = new WaitSignal();
@@ -157,10 +159,13 @@ public partial class NatsConnectionTest
         await pubConnection.PublishAsync(key, 200);
         await pubConnection.PublishAsync(key, 300);
 
+        output.WriteLine("TRY WAIT RECEIVE 300");
         await waitForReceive300;
 
         var disconnectSignal1 = subConnection.ConnectionDisconnectedAsAwaitable();
         var disconnectSignal2 = pubConnection.ConnectionDisconnectedAsAwaitable();
+
+        output.WriteLine("TRY DISCONNECT START");
         await server.DisposeAsync(); // disconnect server
         await disconnectSignal1;
         await disconnectSignal2;
