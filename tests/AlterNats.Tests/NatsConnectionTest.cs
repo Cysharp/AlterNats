@@ -171,14 +171,14 @@ public partial class NatsConnectionTest
         await disconnectSignal2;
 
         // start new nats server on same port
+        output.WriteLine("START NEW SERVER");
         await using var newServer = new NatsServer(output, server.Port);
         await subConnection.ConnectAsync(); // wait open again
         await pubConnection.ConnectAsync(); // wait open again
 
+        output.WriteLine("RECONNECT COMPLETE, PUBLISH 400 and 500");
         await pubConnection.PublishAsync(key, 400);
         await pubConnection.PublishAsync(key, 500);
-        d.Dispose();
-        await pubConnection.PublishAsync(key, 600);
         await waitForReceiveFinish;
 
         list.ShouldEqual(100, 200, 300, 400, 500);
