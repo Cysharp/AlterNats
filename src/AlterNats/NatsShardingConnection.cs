@@ -45,6 +45,7 @@ public sealed class NatsShardingConnection : IAsyncDisposable
         return new ShardringNatsCommand(pool.GetConnection(), new NatsKey(key, true));
     }
 
+    [SkipLocalsInit]
     int GetHashIndex(string key)
     {
         var source = System.Runtime.InteropServices.MemoryMarshal.AsBytes(key.AsSpan());
