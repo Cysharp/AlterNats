@@ -51,9 +51,9 @@ public sealed class NatsShardingConnection : IAsyncDisposable
         Span<byte> destination = stackalloc byte[4];
         XxHash32.TryHash(source, destination, out var _);
 
-        var hash = BinaryPrimitives.ReadInt32LittleEndian(destination);
-        if (hash == int.MinValue) hash++; // int.MinValue can't call Abs
-        return Math.Abs(hash) % pools.Length;
+        var hash = BinaryPrimitives.ReadUInt32BigEndian(destination); // xxhash spec is big-endian
+        var v = hash % (uint)pools.Length;
+        return (int)v;
     }
 
     void Validate(string key)
