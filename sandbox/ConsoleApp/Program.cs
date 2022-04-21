@@ -20,6 +20,14 @@ builder.ConfigureServices(services =>
 
 });
 
+
+
+
+
+
+
+
+
 var app = builder.Build();
 
 app.AddCommands<Runner>();
