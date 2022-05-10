@@ -13,17 +13,53 @@ using ZLogger;
 var builder = ConsoleApp.CreateBuilder(args);
 builder.ConfigureServices(services =>
 {
-
     services.AddNats(4, configureOptions: opt => opt with { Url = "localhost:4222", ConnectOptions = ConnectOptions.Default with { Name = "MyClient" } });
-
-    
-
 });
 
 
 
+// create connection(default, connect to nats://localhost:4222)
 
 
+await using var conn = new NatsConnection();
+
+
+
+// Server
+await conn.SubscribeRequestAsync("foobar", (int x) => $"Hello {x}");
+
+// Client(response: "Hello 100")
+var response = await conn.RequestAsync<int, string>("foobar", 100);
+
+
+
+
+
+
+// subscribe
+var subscription = await conn.SubscribeAsync<Person>("foo", x =>
+{
+    Console.WriteLine($"Received {x}");
+});
+
+// publish
+await conn.PublishAsync("foo", new Person(30, "bar"));
+
+
+
+// Options can configure `with` expression
+var options = NatsOptions.Default with
+{
+    Url = "nats://127.0.0.1:9999",
+    LoggerFactory = new MinimumConsoleLoggerFactory(LogLevel.Information),
+    Serializer = new MessagePackNatsSerializer(),
+    ConnectOptions = ConnectOptions.Default with
+    {
+        Echo = true,
+        Username = "foo",
+        Password = "bar",
+    },
+};
 
 
 
@@ -32,6 +68,8 @@ var app = builder.Build();
 
 app.AddCommands<Runner>();
 await app.RunAsync();
+
+public record Person(int Age, string Name);
 
 public class Runner : ConsoleAppBase
 {

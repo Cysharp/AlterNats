@@ -5,15 +5,27 @@ namespace AlterNats;
 
 public class MessagePackNatsSerializer : INatsSerializer
 {
-    public T? Deserialize<T>(in ReadOnlySequence<byte> buffer)
+    readonly MessagePackSerializerOptions? options;
+
+    public MessagePackNatsSerializer()
     {
-        return MessagePackSerializer.Deserialize<T>(buffer);
+
+    }
+
+    public MessagePackNatsSerializer(MessagePackSerializerOptions options)
+    {
+        this.options = options;
     }
 
     public int Serialize<T>(ICountableBufferWriter bufferWriter, T? value)
     {
         var before = bufferWriter.WrittenCount;
-        MessagePackSerializer.Serialize(bufferWriter, value);
+        MessagePackSerializer.Serialize(bufferWriter, value, options);
         return bufferWriter.WrittenCount - before;
+    }
+
+    public T? Deserialize<T>(in ReadOnlySequence<byte> buffer)
+    {
+        return MessagePackSerializer.Deserialize<T>(buffer, options);
     }
 }

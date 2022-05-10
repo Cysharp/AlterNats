@@ -33,6 +33,7 @@ jobs:
       - run: dotnet test -c Release --no-build
       - run: dotnet pack ./src/AlterNats/AlterNats.csproj -c Release --no-build -p:Version=${{ env.GIT_TAG }} -o ./publish
       - run: dotnet pack ./src/AlterNats.MessagePack/AlterNats.MessagePack.csproj -c Release --no-build -p:Version=${{ env.GIT_TAG }} -o ./publish
+      - run: dotnet pack ./src/AlterNats.Hosting/AlterNats.Hosting.csproj -c Release --no-build -p:Version=${{ env.GIT_TAG }} -o ./publish
       - uses: actions/upload-artifact@v2
         with:
           name: nuget
