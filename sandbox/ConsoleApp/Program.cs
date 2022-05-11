@@ -88,3 +88,8 @@ public class Runner : ConsoleAppBase
         await command.PublishAsync("foo");
     }
 }
+
+public static Keys
+{
+    public static readonly NatsKey FooKey = new NatsKey("foo");
+}
