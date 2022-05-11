@@ -13,7 +13,7 @@ using ZLogger;
 var builder = ConsoleApp.CreateBuilder(args);
 builder.ConfigureServices(services =>
 {
-    services.AddNats(4, configureOptions: opt => opt with { Url = "localhost:4222", ConnectOptions = ConnectOptions.Default with { Name = "MyClient" } });
+    services.AddNats(poolSize: 4, configureOptions: opt => opt with { Url = "localhost:4222", ConnectOptions = ConnectOptions.Default with { Name = "MyClient" } });
 });
 
 
@@ -87,9 +87,4 @@ public class Runner : ConsoleAppBase
         await command.PingAsync();
         await command.PublishAsync("foo");
     }
-}
-
-public static Keys
-{
-    public static readonly NatsKey FooKey = new NatsKey("foo");
 }
