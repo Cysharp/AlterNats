@@ -5,7 +5,17 @@ An alternative high performance [NATS](https://nats.io/) client for .NET. Zero A
 
 ![image](https://user-images.githubusercontent.com/46207/164392256-46d09111-ec70-4cf3-b33d-38dc5d258455.png)
 
-TODO: Reason for why nats? why not official client? why fast?
+The most major PubSub Solution in C# is using Redis and StackExchange.Redis. Redis also has a managed service and has a well-designed client library. However, Redis is primarily a KVS and functions poorly as a PubSub.
+
+* Lack of monitoring for PubSub
+* Lack of clustering support for PubSub
+* Unbalanced pricing for managed services(not much memory is needed for PubSub)
+* Performance
+
+Since NATS is specialized for PubSub, it has a rich system for that purpose, and its performance seems to be perfect. The only drawback is that there is no managed service, but if you use NATS as a pure PubSub, you do not need to think about the persistence process, so I think it is one of the easiest middlewares to operate.
+
+
+TODO: Reason for why not official client? why fast?
 
 Getting Started
 ---
