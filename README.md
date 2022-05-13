@@ -603,6 +603,7 @@ Currently, AlterNats is not oriented toward compatibility and comprehensiveness,
 
 * TLS
 * JetStream
+* Header
 
 License
 ---
