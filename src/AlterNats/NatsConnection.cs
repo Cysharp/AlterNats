@@ -68,6 +68,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     public NatsConnectionState ConnectionState { get; private set; }
     public ServerInfo? ServerInfo { get; internal set; } // server info is set when received INFO
 
+    /// <summary>
+    /// Hook before TCP connection open.
+    /// </summary>
+    public Func<(string Host, int Port), ValueTask>? OnConnectingAsync;
+
     // events
     public event EventHandler<string>? ConnectionDisconnected;
     public event EventHandler<string>? ConnectionOpened;
@@ -139,6 +144,12 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         {
             try
             {
+                if (OnConnectingAsync != null)
+                {
+                    logger.LogInformation("Try to invoke OnConnectingAsync before connect to NATS.");
+                    await OnConnectingAsync((uri.Host, uri.Port)).ConfigureAwait(false);
+                }
+
                 logger.LogInformation("Try to connect NATS {0}:{1}", uri.Host, uri.Port);
                 var conn = new TcpConnection();
                 await conn.ConnectAsync(uri.Host, uri.Port, Options.ConnectTimeout).ConfigureAwait(false);
@@ -298,6 +309,13 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 if (urlEnumerator.MoveNext())
                 {
                     url = urlEnumerator.Current;
+
+                    if (OnConnectingAsync != null)
+                    {
+                        logger.LogInformation("Try to invoke OnConnectingAsync before connect to NATS.");
+                        await OnConnectingAsync((url.Host, url.Port)).ConfigureAwait(false);
+                    }
+
                     logger.LogInformation("Try to connect NATS {0}:{1}", url.Host, url.Port);
                     var conn = new TcpConnection();
                     await conn.ConnectAsync(url.Host, url.Port, Options.ConnectTimeout).ConfigureAwait(false);

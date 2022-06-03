@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Buffers;
+using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Text;
 using ZLogger;
@@ -22,6 +23,11 @@ builder.ConfigureServices(services =>
 
 
 await using var conn = new NatsConnection();
+conn.OnConnectingAsync = async _ =>
+{
+    var health = await new HttpClient().GetFromJsonAsync<NatsHealth>("http://localhost:8222/healthz");
+    if (health == null || health.status != "ok") throw new Exception();
+};
 
 
 
@@ -88,3 +94,5 @@ public class Runner : ConsoleAppBase
         await command.PublishAsync("foo");
     }
 }
+
+public record NatsHealth(string status);

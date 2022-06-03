@@ -230,6 +230,29 @@ public interface INatsCommand
 
 Publish(`byte[]`) or Publish(`ReadOnlyMemory<byte>`) is special, in these cases, the value is sent as is, without passing through the serializer.
 
+## Hook
+
+`NatsConnection` has some hook events.
+
+```csharp
+public event EventHandler<string>? ConnectionDisconnected;
+public event EventHandler<string>? ConnectionOpened;
+public event EventHandler<string>? ReconnectFailed;
+public Func<(string Host, int Port), ValueTask>? OnConnectingAsync;
+```
+
+`ConnectionOpened`, `ConnectionDisconnected`, `ReconnectFailed` is called when occurs there event. `OnConnectingAsync` is called before connect to NATS server. For example, check health by HTTP before connect server as TCP.
+
+```csharp
+// NATS server requires `-m 8222` option
+await using var conn = new NatsConnection();
+conn.OnConnectingAsync = async _ =>
+{
+    var health = await new HttpClient().GetFromJsonAsync<NatsHealth>("http://localhost:8222/healthz");
+    if (health == null || health.status != "ok") throw new Exception();
+};
+```
+
 ### Stats
 
 You can monitor network stats by `NatsConnection.GetStats()`. It can get these stats counter.
