@@ -251,6 +251,8 @@ conn.OnConnectingAsync = async _ =>
     var health = await new HttpClient().GetFromJsonAsync<NatsHealth>("http://localhost:8222/healthz");
     if (health == null || health.status != "ok") throw new Exception();
 };
+
+public record NatsHealth(string status);
 ```
 
 ### Stats
