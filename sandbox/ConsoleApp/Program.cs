@@ -23,9 +23,9 @@ builder.ConfigureServices(services =>
 
 
 await using var conn = new NatsConnection();
-conn.OnConnectingAsync = async _ =>
+conn.OnConnectingAsync = async x =>
 {
-    var health = await new HttpClient().GetFromJsonAsync<NatsHealth>("http://localhost:8222/healthz");
+    var health = await new HttpClient().GetFromJsonAsync<NatsHealth>($"http://{x.Host}:8222/healthz");
     if (health == null || health.status != "ok") throw new Exception();
 };
 

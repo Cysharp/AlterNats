@@ -246,9 +246,9 @@ public Func<(string Host, int Port), ValueTask>? OnConnectingAsync;
 ```csharp
 // NATS server requires `-m 8222` option
 await using var conn = new NatsConnection();
-conn.OnConnectingAsync = async _ =>
+conn.OnConnectingAsync = async x => // (host, port)
 {
-    var health = await new HttpClient().GetFromJsonAsync<NatsHealth>("http://localhost:8222/healthz");
+    var health = await new HttpClient().GetFromJsonAsync<NatsHealth>($"http://{x.Host}:8222/healthz");
     if (health == null || health.status != "ok") throw new Exception();
 };
 
