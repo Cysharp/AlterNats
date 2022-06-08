@@ -238,7 +238,7 @@ Publish(`byte[]`) or Publish(`ReadOnlyMemory<byte>`) is special, in these cases,
 public event EventHandler<string>? ConnectionDisconnected;
 public event EventHandler<string>? ConnectionOpened;
 public event EventHandler<string>? ReconnectFailed;
-public Func<(string Host, int Port), ValueTask>? OnConnectingAsync;
+public Func<(string Host, int Port), ValueTask<(string Host, int Port)>>? OnConnectingAsync;
 ```
 
 `ConnectionOpened`, `ConnectionDisconnected`, `ReconnectFailed` is called when occurs there event. `OnConnectingAsync` is called before connect to NATS server. For example, check health by HTTP before connect server as TCP.
@@ -250,6 +250,9 @@ conn.OnConnectingAsync = async x => // (host, port)
 {
     var health = await new HttpClient().GetFromJsonAsync<NatsHealth>($"http://{x.Host}:8222/healthz");
     if (health == null || health.status != "ok") throw new Exception();
+
+    // if returning another (host, port), TCP connection will use it.
+    return x;
 };
 
 public record NatsHealth(string status);
