@@ -9,12 +9,17 @@ public sealed class NatsShardingConnection : IAsyncDisposable
     readonly NatsConnectionPool[] pools;
 
     public NatsShardingConnection(int poolSize, NatsOptions options, string[] urls)
+        : this(poolSize, options, urls, _ => { })
+    {
+    }
+
+    public NatsShardingConnection(int poolSize, NatsOptions options, string[] urls, Action<NatsConnection> configureConnection)
     {
         poolSize = Math.Max(1, poolSize);
         pools = new NatsConnectionPool[urls.Length];
         for (int i = 0; i < urls.Length; i++)
         {
-            pools[i] = new NatsConnectionPool(poolSize, options with { Url = urls[i] });
+            pools[i] = new NatsConnectionPool(poolSize, options with { Url = urls[i] }, configureConnection);
         }
     }
 

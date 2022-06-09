@@ -22,6 +22,9 @@ builder.ConfigureServices(services =>
 // create connection(default, connect to nats://localhost:4222)
 
 
+// var conn = new NatsConnectionPool(1).GetConnection();
+
+
 await using var conn = new NatsConnection();
 conn.OnConnectingAsync = async x =>
 {
@@ -30,6 +33,7 @@ conn.OnConnectingAsync = async x =>
 
     return x;
 };
+
 
 
 

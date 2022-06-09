@@ -6,29 +6,36 @@ public sealed class NatsConnectionPool : IAsyncDisposable
     int index = -1;
 
     public NatsConnectionPool()
-        : this(Environment.ProcessorCount / 2, NatsOptions.Default)
+        : this(Environment.ProcessorCount / 2, NatsOptions.Default, _ => { })
     {
     }
 
     public NatsConnectionPool(int poolSize)
-        : this(poolSize, NatsOptions.Default)
+        : this(poolSize, NatsOptions.Default, _ => { })
     {
     }
 
     public NatsConnectionPool(NatsOptions options)
-        : this(Environment.ProcessorCount / 2, options)
+        : this(Environment.ProcessorCount / 2, options, _ => { })
     {
 
     }
 
     public NatsConnectionPool(int poolSize, NatsOptions options)
+        : this(poolSize, options, _ => { })
+    {
+    }
+
+    public NatsConnectionPool(int poolSize, NatsOptions options, Action<NatsConnection> configureConnection)
     {
         poolSize = Math.Max(1, poolSize);
         connections = new NatsConnection[poolSize];
         for (int i = 0; i < connections.Length; i++)
         {
             var name = (options.ConnectOptions.Name == null) ? $"#{i}" : $"{options.ConnectOptions.Name}#{i}";
-            connections[i] = new NatsConnection(options with { ConnectOptions = options.ConnectOptions with { Name = name } });
+            var conn = new NatsConnection(options with { ConnectOptions = options.ConnectOptions with { Name = name } });
+            configureConnection(conn);
+            connections[i] = conn;
         }
     }
 
