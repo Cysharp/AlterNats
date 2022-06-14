@@ -221,7 +221,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
     }
 
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
-    async ValueTask<ReadOnlySequence<byte>> DispatchCommandAsync(int code, in ReadOnlySequence<byte> buffer)
+    async ValueTask<ReadOnlySequence<byte>> DispatchCommandAsync(int code, ReadOnlySequence<byte> buffer)
     {
         var length = (int)buffer.Length;
 
