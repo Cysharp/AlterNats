@@ -151,16 +151,15 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                     target = await OnConnectingAsync(target).ConfigureAwait(false);
                 }
 
+                logger.LogInformation("Try to connect NATS {0}", uri);
                 if (uri.IsWebSocket)
                 {
-                    logger.LogInformation("Try to connect NATS {0}", uri.Uri);
                     var conn = new WebSocketConnection();
                     await conn.ConnectAsync(uri.Uri, Options.ConnectTimeout).ConfigureAwait(false);
                     this.socket = conn;
                 }
                 else
                 {
-                    logger.LogInformation("Try to connect NATS {0}:{1}", uri.Host, uri.Port);
                     var conn = new TcpConnection();
                     await conn.ConnectAsync(target.Host, target.Port, Options.ConnectTimeout).ConfigureAwait(false);
                     this.socket = conn;
@@ -171,7 +170,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Fail to connect NATS {0}:{1}.", uri.Host, uri.Port);
+                logger.LogError(ex, "Fail to connect NATS {0}", uri);
             }
         }
         if (this.socket == null)
@@ -235,7 +234,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         lock (gate)
         {
             var url = currentConnectUri;
-            logger.LogInformation("Connect succeed {0}, NATS {1}:{2}", name, url?.Host, url?.Port);
+            logger.LogInformation("Connect succeed {0}, NATS {1}", name, url);
             this.ConnectionState = NatsConnectionState.Open;
             this.pingTimerCancellationTokenSource = new CancellationTokenSource();
             StartPingTimer(pingTimerCancellationTokenSource.Token);
@@ -288,10 +287,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             // Dispose current and create new
             await socket.DisposeAsync().ConfigureAwait(false);
 
-            NatsUri[] urls = Array.Empty<NatsUri>();
+            NatsUri[] urls;
+            var defaultScheme = currentConnectUri?.Uri.Scheme ?? NatsUri.DefaultScheme;
             if (Options.NoRandomize)
             {
-                urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).Distinct().ToArray() ?? Array.Empty<NatsUri>();
+                urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x, defaultScheme)).Distinct().ToArray() ?? Array.Empty<NatsUri>();
                 if (urls.Length == 0)
                 {
                     urls = Options.GetSeedUris();
@@ -299,7 +299,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             }
             else
             {
-                urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x)).OrderBy(_ => Guid.NewGuid()).Distinct().ToArray() ?? Array.Empty<NatsUri>();
+                urls = this.ServerInfo?.ClientConnectUrls?.Select(x => new NatsUri(x, defaultScheme)).OrderBy(_ => Guid.NewGuid()).Distinct().ToArray() ?? Array.Empty<NatsUri>();
                 if (urls.Length == 0)
                 {
                     urls = Options.GetSeedUris();
@@ -328,16 +328,15 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                         target = await OnConnectingAsync(target).ConfigureAwait(false);
                     }
 
+                    logger.LogInformation("Try to connect NATS {0}", url);
                     if (url.IsWebSocket)
                     {
-                        logger.LogInformation("Try to connect NATS {0}", url.Uri);
                         var conn = new WebSocketConnection();
                         await conn.ConnectAsync(url.Uri, Options.ConnectTimeout).ConfigureAwait(false);
                         this.socket = conn;
                     }
                     else
                     {
-                        logger.LogInformation("Try to connect NATS {0}:{1}", url.Host, url.Port);
                         var conn = new TcpConnection();
                         await conn.ConnectAsync(target.Host, target.Port, Options.ConnectTimeout).ConfigureAwait(false);
                         this.socket = conn;
@@ -375,7 +374,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             {
                 if (url != null)
                 {
-                    logger.LogError(ex, "Fail to connect NATS {0}:{1}.", url.Host, url.Port);
+                    logger.LogError(ex, "Fail to connect NATS {0}", url);
                 }
 
                 if (socketWriter != null)
@@ -402,7 +401,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
 
             lock (gate)
             {
-                logger.LogInformation("Connect succeed {0}, NATS {1}:{2}", name, url.Host, url.Port);
+                logger.LogInformation("Connect succeed {0}, NATS {1}", name, url);
                 this.ConnectionState = NatsConnectionState.Open;
                 this.pingTimerCancellationTokenSource = new CancellationTokenSource();
                 StartPingTimer(pingTimerCancellationTokenSource.Token);

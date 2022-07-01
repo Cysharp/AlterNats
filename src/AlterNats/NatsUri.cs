@@ -2,38 +2,52 @@
 
 internal sealed class NatsUri : IEquatable<NatsUri>
 {
-    const string DefaultScheme = "nats://";
-    public static readonly NatsUri Default = new NatsUri("nats://localhost:4222");
-    public const int DefaultPort = 4222;
+    public const string DefaultScheme = "nats";
 
-    internal readonly Uri Uri;
-    public bool IsSecure { get; }
-    public bool IsWebSocket { get; }
+    public readonly Uri Uri;
+    public readonly bool IsSecure;
+    public readonly bool IsWebSocket;
     public string Host => Uri.Host;
     public int Port => Uri.Port;
 
-    public NatsUri(string urlString)
+    public NatsUri(string urlString, string defaultScheme = DefaultScheme)
     {
         if (!urlString.Contains("://"))
         {
-            urlString = DefaultScheme + urlString;
+            urlString = $"{defaultScheme}://{urlString}";
         }
 
-        this.Uri = new Uri(urlString);
-        if (Uri.Scheme is "tls" or "wss")
+        var uriBuilder = new UriBuilder(new Uri(urlString, UriKind.Absolute));
+        if (string.IsNullOrEmpty(uriBuilder.Host))
         {
-            IsSecure = true;
+            uriBuilder.Host = "localhost";
         }
 
-        if (Uri.Scheme is "ws" or "wss")
+        switch (uriBuilder.Scheme)
         {
-            IsWebSocket = true;
+            case "nats":
+                if (uriBuilder.Port == -1)
+                {
+                    uriBuilder.Port = 4222;
+                }
+                break;
+            case "ws":
+                IsWebSocket = true;
+                break;
+            case "wss":
+                IsWebSocket = true;
+                IsSecure = true;
+                break;
+            default:
+                throw new ArgumentException($"unsupported scheme {uriBuilder.Scheme} in nats URL {urlString}", urlString);
         }
+
+        Uri = uriBuilder.Uri;
     }
 
     public override string ToString()
     {
-        return Uri.ToString().Trim('/');
+        return IsWebSocket && Uri.AbsolutePath != "/" ? Uri.ToString() : Uri.ToString().Trim('/');
     }
 
     public override int GetHashCode() => Uri.GetHashCode();
