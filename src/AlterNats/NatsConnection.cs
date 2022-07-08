@@ -29,12 +29,26 @@ internal sealed class WriterState
     {
         Options = options;
         BufferWriter = new FixedArrayBufferWriter();
-        CommandBuffer = Channel.CreateUnbounded<ICommand>(new UnboundedChannelOptions
+
+        if (options.WriterCommandBufferLimit == null)
         {
-            AllowSynchronousContinuations = false, // always should be in async loop.
-            SingleWriter = false,
-            SingleReader = true,
-        });
+            CommandBuffer = Channel.CreateUnbounded<ICommand>(new UnboundedChannelOptions
+            {
+                AllowSynchronousContinuations = false, // always should be in async loop.
+                SingleWriter = false,
+                SingleReader = true,
+            });
+        }
+        else
+        {
+            CommandBuffer = Channel.CreateBounded<ICommand>(new BoundedChannelOptions(options.WriterCommandBufferLimit.Value)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                AllowSynchronousContinuations = false, // always should be in async loop.
+                SingleWriter = false,
+                SingleReader = true,
+            });
+        }
         PriorityCommands = new List<ICommand>();
         PendingPromises = new List<IPromise>();
     }
@@ -49,6 +63,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     readonly RequestResponseManager requestResponseManager;
     readonly ILogger<NatsConnection> logger;
     readonly ObjectPool pool;
+    readonly CancellationTokenSource disposedCancellationTokenSource;
     readonly string name;
     internal readonly ConnectionStatsCounter counter; // allow to call from external sources
     internal readonly ReadOnlyMemory<byte> indBoxPrefix;
@@ -88,6 +103,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         this.Options = options;
         this.ConnectionState = NatsConnectionState.Closed;
         this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        this.disposedCancellationTokenSource = new CancellationTokenSource();
         this.pool = new ObjectPool(options.CommandPoolSize);
         this.name = options.ConnectOptions.Name ?? "";
         this.counter = new ConnectionStatsCounter();
@@ -452,35 +468,96 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
 
     // internal commands.
 
+    CancellationTimerPool GetCommandTimer()
+    {
+        var timer = CancellationTimerPool.Rent(pool, disposedCancellationTokenSource.Token);
+        timer.CancelAfter(Options.CommandTimeout);
+        return timer;
+    }
+
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-    void EnqueueCommand(ICommand command)
+    bool TryEnqueueCommand(ICommand command)
+    {
+        if (commandWriter.TryWrite(command))
+        {
+            // TODO:where to set timer????
+            // command.SetTimer(CancellationTimerPool.Rent(pool, disposedCancellationTokenSource.Token));
+
+            Interlocked.Increment(ref counter.PendingMessages);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    void EnqueueCommandSync(ICommand command)
     {
         if (commandWriter.TryWrite(command))
         {
             Interlocked.Increment(ref counter.PendingMessages);
         }
+        else
+        {
+            // TODO: throw exception
+        }
     }
 
-    internal void PostPong()
+    async ValueTask EnqueueCommandAsync(ICommand command)
     {
-        EnqueueCommand(PongCommand.Create(pool));
+    RETRY:
+        if (commandWriter.TryWrite(command))
+        {
+            Interlocked.Increment(ref counter.PendingMessages);
+        }
+        else
+        {
+            await commandWriter.WaitToWriteAsync(disposedCancellationTokenSource.Token).ConfigureAwait(false);
+            goto RETRY;
+        }
+    }
+
+    async ValueTask EnqueueAndAwaitCommandAsync(IAsyncCommand command)
+    {
+        await EnqueueCommandAsync(command).ConfigureAwait(false);
+        await command.AsValueTask().ConfigureAwait(false);
+    }
+
+    async ValueTask<T> EnqueueAndAwaitCommandAsync<T>(IAsyncCommand<T> command)
+    {
+        await EnqueueCommandAsync(command).ConfigureAwait(false);
+        return await command.AsValueTask().ConfigureAwait(false);
+    }
+
+    internal ValueTask PostPongAsync()
+    {
+        return EnqueueCommandAsync(PongCommand.Create(pool));
     }
 
     internal ValueTask SubscribeAsync(int subscriptionId, string subject, in NatsKey? queueGroup)
     {
         var command = AsyncSubscribeCommand.Create(pool, subscriptionId, new NatsKey(subject, true), queueGroup);
-        EnqueueCommand(command);
-        return command.AsValueTask();
+        return EnqueueAndAwaitCommandAsync(command);
     }
 
-    internal void PostUnsubscribe(int subscriptionId)
+    // as fire-and-forget operation
+    internal async void PostUnsubscribe(int subscriptionId)
     {
-        EnqueueCommand(UnsubscribeCommand.Create(pool, subscriptionId));
-    }
+        try
+        {
+            await EnqueueCommandAsync(UnsubscribeCommand.Create(pool, subscriptionId)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            if (isDisposed) // connection is disposed, don't need to unsubscribe command.
+            {
+                return;
+            }
 
-    internal void PostCommand(ICommand command)
-    {
-        EnqueueCommand(command);
+            logger.LogError(ex, "Failed to send unsubscribe command.");
+        }
     }
 
     internal void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
@@ -536,6 +613,8 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             subscriptionManager.Dispose();
             requestResponseManager.Dispose();
             waitForOpenConnection.TrySetCanceled();
+
+            disposedCancellationTokenSource.Cancel();
         }
     }
 

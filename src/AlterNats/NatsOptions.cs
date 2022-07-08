@@ -8,22 +8,6 @@ namespace AlterNats;
 /// <summary>
 /// Immutable options for NatsConnection, you can configure via `with` operator.
 /// </summary>
-/// <param name="Url"></param>
-/// <param name="ConnectOptions"></param>
-/// <param name="Serializer"></param>
-/// <param name="LoggerFactory"></param>
-/// <param name="WriterBufferSize"></param>
-/// <param name="ReaderBufferSize"></param>
-/// <param name="UseThreadPoolCallback"></param>
-/// <param name="InboxPrefix"></param>
-/// <param name="NoRandomize"></param>
-/// <param name="PingInterval"></param>
-/// <param name="MaxPingOut"></param>
-/// <param name="ReconnectWait"></param>
-/// <param name="ReconnectJitter"></param>
-/// <param name="ConnectTimeout"></param>
-/// <param name="CommandPoolSize"></param>
-/// <param name="RequestTimeout"></param>
 public sealed record NatsOptions
 (
     string Url,
@@ -41,7 +25,9 @@ public sealed record NatsOptions
     TimeSpan ReconnectJitter,
     TimeSpan ConnectTimeout,
     int CommandPoolSize,
-    TimeSpan RequestTimeout
+    TimeSpan RequestTimeout,
+    TimeSpan CommandTimeout,
+    int? WriterCommandBufferLimit
 )
 {
     public static NatsOptions Default = new NatsOptions(
@@ -60,7 +46,9 @@ public sealed record NatsOptions
         ReconnectJitter: TimeSpan.FromMilliseconds(100),
         ConnectTimeout: TimeSpan.FromSeconds(2),
         CommandPoolSize: 256,
-        RequestTimeout: TimeSpan.FromMinutes(1)
+        RequestTimeout: TimeSpan.FromMinutes(1),
+        CommandTimeout: TimeSpan.FromMinutes(1),
+        WriterCommandBufferLimit: null
     );
 
     internal NatsUri[] GetSeedUris()

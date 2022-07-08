@@ -113,6 +113,10 @@ internal sealed class NatsPipeliningWriteProtocolProcessor : IAsyncDisposable
                     while (bufferWriter.WrittenCount < writerBufferSize && reader.TryRead(out var command))
                     {
                         Interlocked.Decrement(ref counter.PendingMessages);
+                        if (command.IsCanceled)
+                        {
+                            continue;
+                        }
 
                         if (command is IBatchCommand batch)
                         {

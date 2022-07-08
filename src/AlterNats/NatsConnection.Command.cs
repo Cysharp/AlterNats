@@ -11,15 +11,27 @@ namespace AlterNats;
 
 public partial class NatsConnection : INatsCommand
 {
-    public void PostPing()
+    public void PostPing(CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            EnqueueCommand(PingCommand.Create(pool));
+            EnqueueCommandSync(PingCommand.Create(pool, GetCommandTimer(), cancellationToken));
         }
         else
         {
-            WithConnect(static self => self.EnqueueCommand(PingCommand.Create(self.pool)));
+            WithConnect(cancellationToken, static (self, token) => self.EnqueueCommandSync(PingCommand.Create(self.pool, self.GetCommandTimer(), token)));
+        }
+    }
+
+    public ValueTask PostPingAsync(CancellationToken cancellationToken = default)
+    {
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return EnqueueCommandAsync(PingCommand.Create(pool));
+        }
+        else
+        {
+            return WithConnectAsync(static self => self.EnqueueCommandAsync(PingCommand.Create(self.pool)));
         }
     }
 
@@ -31,16 +43,21 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPingCommand.Create(this, pool);
-            EnqueueCommand(command);
-            return command.AsValueTask();
+            if (TryEnqueueCommand(command))
+            {
+                return command.AsValueTask();
+            }
+            else
+            {
+                return EnqueueAndAwaitCommandAsync(command);
+            }
         }
         else
         {
             return WithConnectAsync(static self =>
             {
                 var command = AsyncPingCommand.Create(self, self.pool);
-                self.EnqueueCommand(command);
-                return command.AsValueTask();
+                return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
@@ -50,16 +67,21 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishCommand<T>.Create(pool, key, value, Options.Serializer);
-            EnqueueCommand(command);
-            return command.AsValueTask();
+            if (TryEnqueueCommand(command))
+            {
+                return command.AsValueTask();
+            }
+            else
+            {
+                return EnqueueAndAwaitCommandAsync(command);
+            }
         }
         else
         {
             return WithConnectAsync(key, value, static (self, k, v) =>
             {
                 var command = AsyncPublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
-                self.EnqueueCommand(command);
-                return command.AsValueTask();
+                return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
@@ -96,16 +118,21 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishBytesCommand.Create(pool, key, value);
-            EnqueueCommand(command);
-            return command.AsValueTask();
+            if (TryEnqueueCommand(command))
+            {
+                return command.AsValueTask();
+            }
+            else
+            {
+                return EnqueueAndAwaitCommandAsync(command);
+            }
         }
         else
         {
             return WithConnectAsync(key, value, static (self, k, v) =>
             {
                 var command = AsyncPublishBytesCommand.Create(self.pool, k, v);
-                self.EnqueueCommand(command);
-                return command.AsValueTask();
+                return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
@@ -132,14 +159,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishCommand<T>.Create(pool, key, value, Options.Serializer);
-            EnqueueCommand(command);
+            EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(key, value, static (self, k, v) =>
             {
                 var command = PublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
-                self.EnqueueCommand(command);
+                self.EnqueueCommandSync(command);
             });
         }
     }
@@ -164,14 +191,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishBytesCommand.Create(pool, key, value);
-            EnqueueCommand(command);
+            EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(key, value, static (self, k, v) =>
             {
                 var command = PublishBytesCommand.Create(self.pool, k, v);
-                self.EnqueueCommand(command);
+                self.EnqueueCommandSync(command);
             });
         }
     }
@@ -186,16 +213,21 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            EnqueueCommand(command);
-            return command.AsValueTask();
+            if (TryEnqueueCommand(command))
+            {
+                return command.AsValueTask();
+            }
+            else
+            {
+                return EnqueueAndAwaitCommandAsync(command);
+            }
         }
         else
         {
             return WithConnectAsync(values, static (self, v) =>
             {
                 var command = AsyncPublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
-                self.EnqueueCommand(command);
-                return command.AsValueTask();
+                return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
@@ -205,16 +237,21 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            EnqueueCommand(command);
-            return command.AsValueTask();
+            if (TryEnqueueCommand(command))
+            {
+                return command.AsValueTask();
+            }
+            else
+            {
+                return EnqueueAndAwaitCommandAsync(command);
+            }
         }
         else
         {
             return WithConnectAsync(values, static (self, values) =>
             {
                 var command = AsyncPublishBatchCommand<T>.Create(self.pool, values, self.Options.Serializer);
-                self.EnqueueCommand(command);
-                return command.AsValueTask();
+                return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
@@ -224,14 +261,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            EnqueueCommand(command);
+            EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(values, static (self, v) =>
             {
                 var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
-                self.EnqueueCommand(command);
+                self.EnqueueCommandSync(command);
             });
         }
     }
@@ -241,14 +278,14 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
-            EnqueueCommand(command);
+            EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(values, static (self, v) =>
             {
                 var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
-                self.EnqueueCommand(command);
+                self.EnqueueCommandSync(command);
             });
         }
     }
@@ -257,13 +294,13 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            EnqueueCommand(new DirectWriteCommand(protocol, repeatCount));
+            EnqueueCommandSync(new DirectWriteCommand(protocol, repeatCount));
         }
         else
         {
             WithConnect(protocol, repeatCount, static (self, protocol, repeatCount) =>
             {
-                self.EnqueueCommand(new DirectWriteCommand(protocol, repeatCount));
+                self.EnqueueCommandSync(new DirectWriteCommand(protocol, repeatCount));
             });
         }
     }
@@ -272,13 +309,13 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            EnqueueCommand(new DirectWriteCommand(protocol));
+            EnqueueCommandSync(new DirectWriteCommand(protocol));
         }
         else
         {
             WithConnect(protocol, static (self, protocol) =>
             {
-                self.EnqueueCommand(new DirectWriteCommand(protocol));
+                self.EnqueueCommandSync(new DirectWriteCommand(protocol));
             });
         }
     }
@@ -287,13 +324,13 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            EnqueueCommand(command);
+            EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(command, static (self, command) =>
             {
-                self.EnqueueCommand(command);
+                self.EnqueueCommandSync(command);
             });
         }
     }
@@ -301,7 +338,7 @@ public partial class NatsConnection : INatsCommand
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     public async ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default)
     {
-        var timer = CancellationTimerPool.Rent(pool);
+        var timer = CancellationTimerPool.Rent(pool, disposedCancellationTokenSource.Token);
         var linkedToken = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(timer.Token, cancellationToken)
             : null;
@@ -563,16 +600,21 @@ public partial class NatsConnection : INatsCommand
         if (ConnectionState == NatsConnectionState.Open)
         {
             var command = AsyncFlushCommand.Create(pool);
-            EnqueueCommand(command);
-            return command.AsValueTask();
+            if (TryEnqueueCommand(command))
+            {
+                return command.AsValueTask();
+            }
+            else
+            {
+                return EnqueueAndAwaitCommandAsync(command);
+            }
         }
         else
         {
             return WithConnectAsync(static self =>
             {
                 var command = AsyncFlushCommand.Create(self.pool);
-                self.EnqueueCommand(command);
-                return command.AsValueTask();
+                return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }

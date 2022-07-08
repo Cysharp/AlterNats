@@ -12,13 +12,14 @@ internal sealed class CancellationTimerPool : IObjectPoolNode<CancellationTimerP
 
     public CancellationToken Token => cancellationTokenSource.Token;
 
-    public CancellationTimerPool()
+    // this timer pool is tightly coupled with rootToken lifetime(e.g. connection lifetime).
+    public CancellationTimerPool(CancellationToken rootToken)
     {
-        this.cancellationTokenSource = new CancellationTokenSource();
+        this.cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(rootToken);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static CancellationTimerPool Rent(ObjectPool pool)
+    public static CancellationTimerPool Rent(ObjectPool pool, CancellationToken rootToken)
     {
         if (pool.TryRent<CancellationTimerPool>(out var self))
         {
@@ -26,20 +27,22 @@ internal sealed class CancellationTimerPool : IObjectPoolNode<CancellationTimerP
         }
         else
         {
-            return new CancellationTimerPool();
+            return new CancellationTimerPool(rootToken);
         }
     }
 
-    public void Return(ObjectPool pool)
+    public bool TryReturn(ObjectPool pool)
     {
         if (cancellationTokenSource.TryReset())
         {
             pool.Return(this);
+            return true;
         }
         else
         {
             cancellationTokenSource.Cancel();
             cancellationTokenSource.Dispose();
+            return false;
         }
     }
 
