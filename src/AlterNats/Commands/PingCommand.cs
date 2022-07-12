@@ -8,14 +8,14 @@ internal sealed class PingCommand : CommandBase<PingCommand>
     {
     }
 
-    public static PingCommand Create(ObjectPool pool, CancellationTimerPool timer, CancellationToken cancellationToken)
+    public static PingCommand Create(ObjectPool pool, CancellationTimer timer)
     {
         if (!TryRent(pool, out var result))
         {
             result = new PingCommand();
         }
-        result.SetCanceler(timer, cancellationToken);
-        
+        result.SetCancellationTimer(timer);
+
         return result;
     }
 
@@ -38,14 +38,14 @@ internal sealed class AsyncPingCommand : AsyncCommandBase<AsyncPingCommand, Time
     {
     }
 
-    public static AsyncPingCommand Create(NatsConnection connection, ObjectPool pool, CancellationTimerPool timer, CancellationToken cancellationToken)
+    public static AsyncPingCommand Create(NatsConnection connection, ObjectPool pool, CancellationTimer timer)
     {
         if (!TryRent(pool, out var result))
         {
             result = new AsyncPingCommand();
         }
         result.connection = connection;
-        result.SetCanceler(timer, cancellationToken);
+        result.SetCancellationTimer(timer);
 
         return result;
     }

@@ -63,6 +63,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     readonly RequestResponseManager requestResponseManager;
     readonly ILogger<NatsConnection> logger;
     readonly ObjectPool pool;
+    readonly CancellationTimerPool cancellationTimerPool;
     readonly CancellationTokenSource disposedCancellationTokenSource;
     readonly string name;
     internal readonly ConnectionStatsCounter counter; // allow to call from external sources
@@ -105,6 +106,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         this.waitForOpenConnection = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         this.disposedCancellationTokenSource = new CancellationTokenSource();
         this.pool = new ObjectPool(options.CommandPoolSize);
+        this.cancellationTimerPool = new CancellationTimerPool(pool, disposedCancellationTokenSource.Token);
         this.name = options.ConnectOptions.Name ?? "";
         this.counter = new ConnectionStatsCounter();
         this.writerState = new WriterState(options);
@@ -468,21 +470,17 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
 
     // internal commands.
 
-    CancellationTimerPool GetCommandTimer()
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    CancellationTimer GetCommandTimer(CancellationToken cancellationToken)
     {
-        var timer = CancellationTimerPool.Rent(pool, disposedCancellationTokenSource.Token);
-        timer.CancelAfter(Options.CommandTimeout);
-        return timer;
+        return cancellationTimerPool.Start(Options.CommandTimeout, cancellationToken);
     }
-
+    
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     bool TryEnqueueCommand(ICommand command)
     {
         if (commandWriter.TryWrite(command))
         {
-            // TODO:where to set timer????
-            // command.SetTimer(CancellationTimerPool.Rent(pool, disposedCancellationTokenSource.Token));
-
             Interlocked.Increment(ref counter.PendingMessages);
             return true;
         }
@@ -687,6 +685,12 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     {
         await ConnectAsync().ConfigureAwait(false);
         return await coreAsync(this).ConfigureAwait(false);
+    }
+
+    async ValueTask<TResult> WithConnectAsync<T1, TResult>(T1 item1, Func<NatsConnection, T1,  ValueTask<TResult>> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        return await coreAsync(this, item1).ConfigureAwait(false);
     }
 
     async ValueTask<TResult> WithConnectAsync<T1, T2, TResult>(T1 item1, T2 item2, Func<NatsConnection, T1, T2, ValueTask<TResult>> coreAsync)

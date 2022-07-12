@@ -8,7 +8,7 @@ namespace AlterNats.Commands;
 internal interface ICommand
 {
     bool IsCanceled { get; }
-    void SetCanceler(CancellationTimerPool timer, CancellationToken cancellationToken);
+    void SetCancellationTimer(CancellationTimer timer);
     void Return(ObjectPool pool);
     void Write(ProtocolWriter writer);
 }

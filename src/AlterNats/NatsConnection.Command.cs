@@ -15,11 +15,11 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            EnqueueCommandSync(PingCommand.Create(pool, GetCommandTimer(), cancellationToken));
+            EnqueueCommandSync(PingCommand.Create(pool, GetCommandTimer(cancellationToken)));
         }
         else
         {
-            WithConnect(cancellationToken, static (self, token) => self.EnqueueCommandSync(PingCommand.Create(self.pool, self.GetCommandTimer(), token)));
+            WithConnect(cancellationToken, static (self, token) => self.EnqueueCommandSync(PingCommand.Create(self.pool, self.GetCommandTimer(token))));
         }
     }
 
@@ -27,22 +27,22 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return EnqueueCommandAsync(PingCommand.Create(pool));
+            return EnqueueCommandAsync(PingCommand.Create(pool, GetCommandTimer(cancellationToken)));
         }
         else
         {
-            return WithConnectAsync(static self => self.EnqueueCommandAsync(PingCommand.Create(self.pool)));
+            return WithConnectAsync(cancellationToken, static (self, token) => self.EnqueueCommandAsync(PingCommand.Create(self.pool, self.GetCommandTimer(token))));
         }
     }
 
     /// <summary>
     /// Send PING command and await PONG. Return value is similar as Round trip time.
     /// </summary>
-    public ValueTask<TimeSpan> PingAsync()
+    public ValueTask<TimeSpan> PingAsync(CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = AsyncPingCommand.Create(this, pool);
+            var command = AsyncPingCommand.Create(this, pool, GetCommandTimer(cancellationToken));
             if (TryEnqueueCommand(command))
             {
                 return command.AsValueTask();
@@ -54,9 +54,9 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(static self =>
+            return WithConnectAsync(cancellationToken, static (self, token) =>
             {
-                var command = AsyncPingCommand.Create(self, self.pool);
+                var command = AsyncPingCommand.Create(self, self.pool, self.GetCommandTimer(token));
                 return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
@@ -338,7 +338,7 @@ public partial class NatsConnection : INatsCommand
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     public async ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default)
     {
-        var timer = CancellationTimerPool.Rent(pool, disposedCancellationTokenSource.Token);
+        var timer = CancellationTimer.Rent(pool, disposedCancellationTokenSource.Token);
         var linkedToken = cancellationToken.CanBeCanceled
             ? CancellationTokenSource.CreateLinkedTokenSource(timer.Token, cancellationToken)
             : null;

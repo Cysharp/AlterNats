@@ -15,8 +15,7 @@ internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
 
     static readonly Action<object?> cancelAction = SetCancel;
     CancellationTokenRegistration timerRegistration;
-    CancellationTokenRegistration cancelRegistration;
-    CancellationTimerPool? timer;
+    CancellationTimer? timer;
     public bool IsCanceled { get; private set; }
 
     protected abstract void Reset();
@@ -29,13 +28,11 @@ internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
 
     void ICommand.Return(ObjectPool pool)
     {
-        timerRegistration.Dispose();
-        cancelRegistration.Dispose();
+        timerRegistration.Dispose(); // wait for cancel callback complete
         timerRegistration = default;
-        cancelRegistration = default;
 
         // if failed to return timer, maybe invoked timer callback so avoid race condition, does not return command itself to pool.
-        if (timer == null || timer.TryReturn(pool))
+        if (!IsCanceled && (timer == null || timer.TryReturn()))
         {
             timer = null;
             Reset();
@@ -45,22 +42,16 @@ internal abstract class CommandBase<TSelf> : ICommand, IObjectPoolNode<TSelf>
 
     public abstract void Write(ProtocolWriter writer);
 
-    public void SetCanceler(CancellationTimerPool timer, CancellationToken cancellationToken)
+    public void SetCancellationTimer(CancellationTimer timer)
     {
         this.timer = timer;
         this.timerRegistration = timer.Token.UnsafeRegister(cancelAction, this);
-        if (cancellationToken.CanBeCanceled)
-        {
-            this.cancelRegistration = cancellationToken.UnsafeRegister(cancelAction, this);
-        }
     }
 
     static void SetCancel(object? state)
     {
         var self = (CommandBase<TSelf>)state!;
         self.IsCanceled = true;
-        self.timerRegistration.Dispose();
-        self.cancelRegistration.Dispose();
     }
 }
 
@@ -72,9 +63,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
 
     static readonly Action<object?> cancelAction = SetCancel;
     CancellationTokenRegistration timerRegistration;
-    CancellationTokenRegistration cancelRegistration;
-    CancellationToken additionalCancellationToken;
-    CancellationTimerPool? timer;
+    CancellationTimer? timer;
     public bool IsCanceled { get; private set; }
 
     ObjectPool? objectPool;
@@ -108,16 +97,15 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
     {
         // succeed operation, remove canceler
         timerRegistration.Dispose();
-        cancelRegistration.Dispose();
         timerRegistration = default;
-        cancelRegistration = default;
-        if (timer != null && objectPool != null)
+
+        if (IsCanceled) return; // already called Canceled, it invoked SetCanceled.
+
+        if (timer != null)
         {
-            if (!timer.TryReturn(objectPool))
+            if (!timer.TryReturn())
             {
                 // cancel is called. don't set result.
-                timer = null;
-                SetCancel(this); // making sure
                 return;
             }
             timer = null;
@@ -130,6 +118,9 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
     {
         if (noReturn) return;
 
+        timerRegistration.Dispose();
+        timerRegistration = default;
+
         noReturn = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
         {
@@ -140,6 +131,9 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
     public void SetException(Exception exception)
     {
         if (noReturn) return;
+
+        timerRegistration.Dispose();
+        timerRegistration = default;
 
         noReturn = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
@@ -160,6 +154,8 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
             Reset();
             var p = objectPool;
             objectPool = null;
+            timer = null;
+            timerRegistration = default;
             if (p != null && !noReturn) // canceled object don't return pool to avoid call SetResult/Exception after await
             {
                 p.Return(Unsafe.As<TSelf>(this));
@@ -182,34 +178,18 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
         core.SetResult(null!);
     }
 
-    public void SetCanceler(CancellationTimerPool timer, CancellationToken cancellationToken)
+    public void SetCancellationTimer(CancellationTimer timer)
     {
         this.timer = timer;
         this.timerRegistration = timer.Token.UnsafeRegister(cancelAction, this);
-        if (cancellationToken.CanBeCanceled)
-        {
-            this.additionalCancellationToken = cancellationToken;
-            this.cancelRegistration = cancellationToken.UnsafeRegister(cancelAction, this);
-        }
     }
 
     static void SetCancel(object? state)
     {
         var self = (AsyncCommandBase<TSelf>)state!;
         self.IsCanceled = true;
-        self.timerRegistration.Dispose();
-        self.cancelRegistration.Dispose();
-        if (self.additionalCancellationToken.IsCancellationRequested)
-        {
-            var token = self.additionalCancellationToken;
-            self.additionalCancellationToken = default;
-            self.SetCanceled(token);
-        }
-        else
-        {
-            self.additionalCancellationToken = default;
-            self.SetCanceled(CancellationToken.None);
-        }
+        var token = self.timer?.GetCanceledToken() ?? CancellationToken.None;
+        self.SetCanceled(token);
     }
 }
 
@@ -221,9 +201,7 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
 
     static readonly Action<object?> cancelAction = SetCancel;
     CancellationTokenRegistration timerRegistration;
-    CancellationTokenRegistration cancelRegistration;
-    CancellationToken additionalCancellationToken;
-    CancellationTimerPool? timer;
+    CancellationTimer? timer;
     public bool IsCanceled { get; private set; }
 
     ManualResetValueTaskSourceCore<TResponse> core;
@@ -262,18 +240,16 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
     {
         response = result;
 
-        // succeed operation, remove canceler
+        if (IsCanceled) return; // already called Canceled, it invoked SetCanceled.
+
         timerRegistration.Dispose();
-        cancelRegistration.Dispose();
         timerRegistration = default;
-        cancelRegistration = default;
+
         if (timer != null && objectPool != null)
         {
-            if (!timer.TryReturn(objectPool))
+            if (!timer.TryReturn())
             {
                 // cancel is called. don't set result.
-                timer = null;
-                SetCancel(this); // making sure
                 return;
             }
             timer = null;
@@ -286,6 +262,9 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
     {
         if (noReturn) return;
 
+        timerRegistration.Dispose();
+        timerRegistration = default;
+
         noReturn = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
         {
@@ -296,6 +275,9 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
     public void SetException(Exception exception)
     {
         if (noReturn) return;
+
+        timerRegistration.Dispose();
+        timerRegistration = default;
 
         noReturn = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
@@ -317,6 +299,8 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
             var p = objectPool;
             response = default!;
             objectPool = null;
+            timer = null;
+            timerRegistration = default;
             if (p != null && !noReturn) // canceled object don't return pool to avoid call SetResult/Exception after await
             {
                 p.Return(Unsafe.As<TSelf>(this));
@@ -339,33 +323,17 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
         core.SetResult(response!);
     }
 
-    public void SetCanceler(CancellationTimerPool timer, CancellationToken cancellationToken)
+    public void SetCancellationTimer(CancellationTimer timer)
     {
         this.timer = timer;
         this.timerRegistration = timer.Token.UnsafeRegister(cancelAction, this);
-        if (cancellationToken.CanBeCanceled)
-        {
-            this.additionalCancellationToken = cancellationToken;
-            this.cancelRegistration = cancellationToken.UnsafeRegister(cancelAction, this);
-        }
     }
 
     static void SetCancel(object? state)
     {
         var self = (AsyncCommandBase<TSelf, TResponse>)state!;
         self.IsCanceled = true;
-        self.timerRegistration.Dispose();
-        self.cancelRegistration.Dispose();
-        if (self.additionalCancellationToken.IsCancellationRequested)
-        {
-            var token = self.additionalCancellationToken;
-            self.additionalCancellationToken = default;
-            self.SetCanceled(token);
-        }
-        else
-        {
-            self.additionalCancellationToken = default;
-            self.SetCanceled(CancellationToken.None);
-        }
+        var token = self.timer?.GetCanceledToken() ?? CancellationToken.None;
+        self.SetCanceled(token);
     }
 }
