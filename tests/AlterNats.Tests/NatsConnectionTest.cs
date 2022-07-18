@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit.Abstractions;
@@ -91,8 +92,10 @@ public partial class NatsConnectionTest
         }
     }
 
-    [Fact]
-    public async Task RequestTest()
+    [Theory]
+    [InlineData(10)] // 10 bytes
+    [InlineData(32768)] // 32 KiB
+    public async Task RequestTest(int minSize)
     {
         await using var server = new NatsServer(output);
 
@@ -100,18 +103,20 @@ public partial class NatsConnectionTest
         await using var subConnection = server.CreateClientConnection(options);
         await using var pubConnection = server.CreateClientConnection(options);
 
+
         var key = Guid.NewGuid().ToString();
+        var text = new StringBuilder(minSize).Insert(0, "a", minSize).ToString();
 
         await subConnection.SubscribeRequestAsync<int, string>(key, x =>
         {
             if (x == 100) throw new Exception();
-            return "Hello:" + x;
+            return text + x;
         });
 
         await Task.Delay(1000);
 
         var v = await pubConnection.RequestAsync<int, string>(key, 9999);
-        v.Should().Be("Hello:9999");
+        v.Should().Be(text + 9999);
 
         // server exception handling
         await Assert.ThrowsAsync<NatsException>(async () =>
@@ -122,7 +127,7 @@ public partial class NatsConnectionTest
         // timeout check
         await Assert.ThrowsAsync<TimeoutException>(async () =>
         {
-            await pubConnection.RequestAsync<int, int>("foo", 10);
+            await pubConnection.RequestAsync<int, string>("foo", 10);
         });
     }
 
