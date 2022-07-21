@@ -57,6 +57,7 @@ internal sealed class RequestResponseManager : IDisposable
     RequestAsyncCommand<TRequest, TResponse?> AddAsyncCore<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         var id = Interlocked.Increment(ref requestId);
+        // TODO:how use CancellationTimerPool?
         var command = RequestAsyncCommand<TRequest, TResponse?>.Create(pool, key, inBoxPrefix, id, request, connection.Options.Serializer, cancellationToken, this);
 
         lock (gate)

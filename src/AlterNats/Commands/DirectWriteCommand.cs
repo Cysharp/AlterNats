@@ -3,10 +3,12 @@ using System.Text;
 
 namespace AlterNats.Commands;
 
-// public fore optimize reusing
+// public for optimize reusing
 public sealed class DirectWriteCommand : ICommand
 {
     readonly byte[] protocol;
+
+    bool ICommand.IsCanceled => false;
 
     /// <param name="protocol">raw command without \r\n</param>
     /// <param name="repeatCount">repeating count.</param>
@@ -44,5 +46,10 @@ public sealed class DirectWriteCommand : ICommand
     void ICommand.Write(ProtocolWriter writer)
     {
         writer.WriteRaw(protocol);
+    }
+
+    void ICommand.SetCancellationTimer(CancellationTimer timer)
+    {
+        // direct write is not supporting cancellationtimer.
     }
 }
