@@ -27,7 +27,7 @@ internal sealed class SubscriptionManager : IDisposable
         }
     }
 
-    public async ValueTask<IDisposable> AddAsync<T>(string key, NatsKey? queueGroup, Action<T> handler)
+    public async ValueTask<IDisposable> AddAsync<T>(string key, NatsKey? queueGroup, Action<T> handler,INatsSerializer? customSerialier = null)
     {
         int sid;
         RefCountSubscription? subscription;
@@ -42,6 +42,11 @@ internal sealed class SubscriptionManager : IDisposable
                     throw new InvalidOperationException($"Register different type on same key. Key: {key} RegisteredType:{subscription.ElementType.FullName} NewType:{typeof(T).FullName}");
                 }
 
+                if (subscription.CustomSerializer?.GetType() != customSerialier?.GetType())
+                {
+                    throw new InvalidOperationException($"Register different serializer type on same key");
+                }
+
                 handlerId = subscription.AddHandler(handler);
                 return new Subscription(subscription, handlerId);
             }
@@ -51,7 +56,8 @@ internal sealed class SubscriptionManager : IDisposable
 
                 subscription = new RefCountSubscription(this, sid, key, typeof(T))
                 {
-                    QueueGroup = queueGroup
+                    QueueGroup = queueGroup,
+                    CustomSerializer=customSerialier
                 };
                 handlerId = subscription.AddHandler(handler);
                 bySubscriptionId[sid] = subscription;
@@ -192,7 +198,7 @@ internal sealed class SubscriptionManager : IDisposable
             }
         }
 
-        MessagePublisher.Publish(subscription.ElementType, connection.Options, buffer, list);
+        MessagePublisher.Publish(subscription.ElementType, connection.Options, subscription.CustomSerializer, buffer, list);
     }
 
     public void PublishToRequestHandler(int subscriptionId, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
@@ -276,6 +282,8 @@ internal sealed class RefCountSubscription
     public FreeList<object> Handlers { get; }
 
     public bool IsRequestHandler => ResponseType != null;
+
+    public INatsSerializer? CustomSerializer { get; init; }
 
     public RefCountSubscription(SubscriptionManager manager, int subscriptionId, string key, Type elementType)
     {

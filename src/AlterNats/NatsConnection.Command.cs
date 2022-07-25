@@ -388,12 +388,12 @@ public partial class NatsConnection : INatsCommand
         return SubscribeAsync<byte[]>(key, _ => handler());
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler, INatsSerializer? customSerializer = null)
     {
-        return SubscribeAsync(key.Key, handler);
+        return SubscribeAsync(key.Key, handler, customSerializer);
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler,INatsSerializer? customSerializer=null)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -401,19 +401,19 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(key, handler, static (self, key, handler) =>
+            return WithConnectAsync(key, handler, customSerializer, static (self, key, handler, customSerializer) =>
             {
-                return self.subscriptionManager.AddAsync(key, null, handler);
+                return self.subscriptionManager.AddAsync(key, null, handler, customSerializer);
             });
         }
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler, INatsSerializer? customSerializer = null)
     {
-        return SubscribeAsync(key.Key, asyncHandler);
+        return SubscribeAsync(key.Key, asyncHandler, customSerializer);
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler, INatsSerializer? customSerializer = null)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -427,11 +427,11 @@ public partial class NatsConnection : INatsCommand
                 {
                     logger.LogError(ex, "Error occured during subscribe message.");
                 }
-            });
+            }, customSerializer);
         }
         else
         {
-            return WithConnectAsync(key, asyncHandler, static (self, key, asyncHandler) =>
+            return WithConnectAsync(key, asyncHandler, customSerializer, static (self, key, asyncHandler, customSerializer) =>
             {
                 return self.subscriptionManager.AddAsync<T>(key, null, async x =>
                 {
@@ -443,7 +443,7 @@ public partial class NatsConnection : INatsCommand
                     {
                         self.logger.LogError(ex, "Error occured during subscribe message.");
                     }
-                });
+                }, customSerializer);
             });
         }
     }

@@ -41,10 +41,10 @@ public interface INatsCommand
     ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(string key, TRequest request, CancellationToken cancellationToken = default);
     ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action handler);
     ValueTask<IDisposable> SubscribeAsync(string key, Action handler);
-    ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler);
-    ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler);
-    ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler);
-    ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler);
+    ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler, INatsSerializer? customSerializer = null);
+    ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler, INatsSerializer? customSerializer = null);
+    ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler, INatsSerializer? customSerializer = null);
+    ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler, INatsSerializer? customSerializer = null);
     ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, Task<TResponse>> requestHandler);
     ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> requestHandler);
     ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, Task<TResponse>> requestHandler);

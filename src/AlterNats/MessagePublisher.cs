@@ -11,9 +11,9 @@ internal static class MessagePublisher
     static readonly Func<Type, PublishMessage> createPublisher = CreatePublisher;
     static readonly ConcurrentDictionary<Type, PublishMessage> publisherCache = new();
 
-    public static void Publish(Type type, NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
+    public static void Publish(Type type, NatsOptions options, INatsSerializer? customSerializer, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
-        publisherCache.GetOrAdd(type, createPublisher).Invoke(options, buffer, callbacks);
+        publisherCache.GetOrAdd(type, createPublisher).Invoke(options, customSerializer, buffer, callbacks);
     }
 
     static PublishMessage CreatePublisher(Type type)
@@ -33,16 +33,16 @@ internal static class MessagePublisher
     }
 }
 
-internal delegate void PublishMessage(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks);
+internal delegate void PublishMessage(NatsOptions options, INatsSerializer? customSerializer, in ReadOnlySequence<byte> buffer, object?[] callbacks);
 
 internal sealed class MessagePublisher<T>
 {
-    public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
+    public void Publish(NatsOptions options, INatsSerializer? customSerializer, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
         T? value;
         try
         {
-            value = options!.Serializer.Deserialize<T>(buffer);
+            value = (customSerializer?? options!.Serializer).Deserialize<T>(buffer);
         }
         catch (Exception ex)
         {
@@ -98,14 +98,18 @@ internal sealed class MessagePublisher<T>
 
 internal sealed class ByteArrayMessagePublisher
 {
-    public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
+    public void Publish(NatsOptions options, INatsSerializer? customSerializer, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
         byte[] value;
         try
-        {
+        {            
             if (buffer.IsEmpty)
             {
                 value = Array.Empty<byte>();
+            }
+            else if(customSerializer != null)
+            {
+                value = customSerializer.Deserialize<byte[]>(buffer)!;
             }
             else
             {
@@ -166,7 +170,7 @@ internal sealed class ByteArrayMessagePublisher
 
 internal sealed class ReadOnlyMemoryMessagePublisher
 {
-    public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object?[] callbacks)
+    public void Publish(NatsOptions options, INatsSerializer? customSerializer, in ReadOnlySequence<byte> buffer, object?[] callbacks)
     {
         ReadOnlyMemory<byte> value;
         try
@@ -174,6 +178,10 @@ internal sealed class ReadOnlyMemoryMessagePublisher
             if (buffer.IsEmpty)
             {
                 value = Array.Empty<byte>();
+            }
+            if (customSerializer != null)
+            {
+                value = customSerializer.Deserialize<ReadOnlyMemory<byte>>(buffer)!;
             }
             else
             {
