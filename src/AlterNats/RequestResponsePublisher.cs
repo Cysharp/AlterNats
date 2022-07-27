@@ -12,9 +12,9 @@ internal static class ResponsePublisher
     static readonly Func<Type, PublishResponseMessage> createPublisher = CreatePublisher;
     static readonly ConcurrentDictionary<Type, PublishResponseMessage> publisherCache = new();
 
-    public static void PublishResponse(Type type, NatsOptions options, in ReadOnlySequence<byte> buffer, object callback)
+    public static void PublishResponse(Type type, NatsOptions options, in NatsKey subject, in ReadOnlySequence<byte> buffer, object callback)
     {
-        publisherCache.GetOrAdd(type, createPublisher).Invoke(options, buffer, callback);
+        publisherCache.GetOrAdd(type, createPublisher).Invoke(options, subject, buffer, callback);
     }
 
     static PublishResponseMessage CreatePublisher(Type type)
@@ -31,9 +31,9 @@ internal static class RequestPublisher
     static readonly Func<(Type, Type), PublishRequestMessage> createPublisher = CreatePublisher;
     static readonly ConcurrentDictionary<(Type, Type), PublishRequestMessage> publisherCache = new();
 
-    public static void PublishRequest(Type requestType, Type responseType, NatsConnection connection, in NatsKey replyTo, in ReadOnlySequence<byte> buffer, object callback)
+    public static void PublishRequest(Type requestType, Type responseType, NatsConnection connection,  in NatsKey replyTo, in ReadOnlySequence<byte> buffer, object callback)
     {
-        publisherCache.GetOrAdd((requestType, responseType), createPublisher).Invoke(connection, replyTo, buffer, callback);
+        publisherCache.GetOrAdd((requestType, responseType), createPublisher).Invoke(connection,replyTo, buffer, callback);
     }
 
     static PublishRequestMessage CreatePublisher((Type requestType, Type responseType) type)
@@ -44,12 +44,12 @@ internal static class RequestPublisher
     }
 }
 
-internal delegate void PublishResponseMessage(NatsOptions options, in ReadOnlySequence<byte> buffer, object callback);
+internal delegate void PublishResponseMessage(NatsOptions options, in NatsKey subject, in ReadOnlySequence<byte> buffer, object callback);
 internal delegate void PublishRequestMessage(NatsConnection connection, in NatsKey replyTo, in ReadOnlySequence<byte> buffer, object callback);
 
 internal sealed class ResponsePublisher<T>
 {
-    public void Publish(NatsOptions options, in ReadOnlySequence<byte> buffer, object callback)
+    public void Publish(NatsOptions options, in NatsKey subject, in ReadOnlySequence<byte> buffer, object callback)
     {
         // when empty(RequestPublisher detect exception)
         if (buffer.IsEmpty)

@@ -85,10 +85,9 @@ namespace NatsBenchmark
             subConn.ConnectAsync().AsTask().Wait();
 
 
-
             var key = new NatsKey(subject);
 
-            var d = subConn.SubscribeAsync<byte[]>(subject, _ =>
+            var d = subConn.SubscribeAsync<byte[]>(subject, (_, _) =>
            {
                Interlocked.Increment(ref subCount);
                // logger.LogInformation("here:{0}", subCount);
@@ -167,7 +166,7 @@ namespace NatsBenchmark
 
             var key = new NatsKey(subject);
 
-            var d = subConn.SubscribeAsync<byte[]>(subject, _ =>
+            var d = subConn.SubscribeAsync<byte[]>(subject, (_, _) =>
             {
                 Interlocked.Increment(ref subCount);
                 // logger.LogInformation("here:{0}", subCount);
@@ -253,7 +252,7 @@ namespace NatsBenchmark
 
             var key = new NatsKey(subject);
 
-            var d = subConn.SubscribeAsync<byte[]>(subject, _ =>
+            var d = subConn.SubscribeAsync<byte[]>(subject, (_, _) =>
             {
                 Interlocked.Increment(ref subCount);
                 // logger.LogInformation("here:{0}", subCount);
@@ -337,7 +336,7 @@ namespace NatsBenchmark
 
             var key = new NatsKey(subject);
 
-            var d = subConn.SubscribeAsync<byte[]>(subject, _ =>
+            var d = subConn.SubscribeAsync<byte[]>(subject, (_, _) =>
             {
                 Interlocked.Increment(ref subCount);
                 // logger.LogInformation("here:{0}", subCount);
@@ -444,7 +443,7 @@ namespace NatsBenchmark
 
             var key = new NatsKey(subject);
 
-            var d = subConn.SubscribeAsync<byte[]>(subject, _ =>
+            var d = subConn.SubscribeAsync<byte[]>(subject, (_, _) =>
             {
                 Interlocked.Increment(ref subCount);
                 // logger.LogInformation("here:{0}", subCount);
@@ -458,7 +457,7 @@ namespace NatsBenchmark
                     }
                 }
             }).AsTask().Result;
-            var d2 = subConn2.SubscribeAsync<byte[]>(subject, _ =>
+            var d2 = subConn2.SubscribeAsync<byte[]>(subject, (_,_) =>
             {
                 Interlocked.Increment(ref subCount2);
                 // logger.LogInformation("here:{0}", subCount);
@@ -558,7 +557,7 @@ namespace NatsBenchmark
             pubConn.ConnectAsync().AsTask().Wait();
             subConn.ConnectAsync().AsTask().Wait();
 
-            var d = subConn.SubscribeAsync<Vector3>(key.Key, _ =>
+            var d = subConn.SubscribeAsync<Vector3>(key.Key, (_, _) =>
             {
                 Interlocked.Increment(ref subCount);
                 // logger.LogInformation("here:{0}", subCount);

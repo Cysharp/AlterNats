@@ -483,19 +483,19 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         EnqueueCommand(command);
     }
 
-    internal void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
+    internal void PublishToClientHandlers(int subscriptionId, in NatsKey subject, in ReadOnlySequence<byte> buffer)
     {
-        subscriptionManager.PublishToClientHandlers(subscriptionId, buffer);
+        subscriptionManager.PublishToClientHandlers(subscriptionId, subject, buffer);
     }
 
-    internal void PublishToRequestHandler(int subscriptionId, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
+    internal void PublishToRequestHandler(int subscriptionId, in NatsKey subject, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
     {
-        subscriptionManager.PublishToRequestHandler(subscriptionId, replyTo, buffer);
+        subscriptionManager.PublishToRequestHandler(subscriptionId, subject, replyTo, buffer);
     }
 
-    internal void PublishToResponseHandler(int requestId, in ReadOnlySequence<byte> buffer)
+    internal void PublishToResponseHandler(int requestId,in NatsKey subject, in ReadOnlySequence<byte> buffer)
     {
-        requestResponseManager.PublishToResponseHandler(requestId, buffer);
+        requestResponseManager.PublishToResponseHandler(requestId, subject, buffer);
     }
 
     internal void ResetPongCount()

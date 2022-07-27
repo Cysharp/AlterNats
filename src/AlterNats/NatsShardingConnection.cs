@@ -104,14 +104,14 @@ public readonly struct ShardringNatsCommand
     public ValueTask PublishAsync(byte[] value) => connection.PublishAsync(key, value);
     public ValueTask PublishAsync(ReadOnlyMemory<byte> value) => connection.PublishAsync(key, value);
     public ValueTask PublishAsync<T>(T value) => connection.PublishAsync(key, value);
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey queueGroup, Action<T> handler) => connection.QueueSubscribeAsync(key, queueGroup, handler);
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey queueGroup, Func<T, Task> asyncHandler) => connection.QueueSubscribeAsync(key, queueGroup, asyncHandler);
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string queueGroup, Action<T> handler) => connection.QueueSubscribeAsync(key.Key, queueGroup, handler);
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string queueGroup, Func<T, Task> asyncHandler) => connection.QueueSubscribeAsync(key.Key, queueGroup, asyncHandler);
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey queueGroup, Action<NatsKey,T> handler) => connection.QueueSubscribeAsync(key, queueGroup, handler);
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey queueGroup, Func<NatsKey,T, Task> asyncHandler) => connection.QueueSubscribeAsync(key, queueGroup, asyncHandler);
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string queueGroup, Action<NatsKey,T> handler) => connection.QueueSubscribeAsync(key.Key, queueGroup, handler);
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string queueGroup, Func<NatsKey,T, Task> asyncHandler) => connection.QueueSubscribeAsync(key.Key, queueGroup, asyncHandler);
     public ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(TRequest request) => connection.RequestAsync<TRequest, TResponse>(key, request);
-    public ValueTask<IDisposable> SubscribeAsync(Action handler) => connection.SubscribeAsync(key, handler);
-    public ValueTask<IDisposable> SubscribeAsync<T>(Action<T> handler) => connection.SubscribeAsync<T>(key, handler);
-    public ValueTask<IDisposable> SubscribeAsync<T>(Func<T, Task> asyncHandler) => connection.SubscribeAsync<T>(key, asyncHandler);
+    public ValueTask<IDisposable> SubscribeAsync(Action<NatsKey> handler) => connection.SubscribeAsync(key, handler);
+    public ValueTask<IDisposable> SubscribeAsync<T>(Action<NatsKey,T> handler) => connection.SubscribeAsync<T>(key, handler);
+    public ValueTask<IDisposable> SubscribeAsync<T>(Func<NatsKey,T, Task> asyncHandler) => connection.SubscribeAsync<T>(key, asyncHandler);
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(Func<TRequest, Task<TResponse>> requestHandler) => connection.SubscribeRequestAsync<TRequest, TResponse>(key, requestHandler);
     public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(Func<TRequest, TResponse> requestHandler) => connection.SubscribeRequestAsync<TRequest, TResponse>(key, requestHandler);
 }

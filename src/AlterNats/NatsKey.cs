@@ -30,6 +30,8 @@ public readonly struct NatsKey : IEquatable<NatsKey>
         }
     }
 
+    
+
     public override int GetHashCode()
     {
         return Key.GetHashCode();

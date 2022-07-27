@@ -38,7 +38,9 @@ conn.OnConnectingAsync = async x =>
 
 
 // Server
-await conn.SubscribeRequestAsync("foobar", (int x) => $"Hello {x}");
+await conn.SubscribeRequestAsync("foobar",
+    (int x) => $"Hello {x}"
+    );
 
 // Client(response: "Hello 100")
 var response = await conn.RequestAsync<int, string>("foobar", 100);
@@ -49,7 +51,7 @@ var response = await conn.RequestAsync<int, string>("foobar", 100);
 
 
 // subscribe
-var subscription = await conn.SubscribeAsync<Person>("foo", x =>
+var subscription = await conn.SubscribeAsync<Person>("foo", (s,x) =>
 {
     Console.WriteLine($"Received {x}");
 });
@@ -95,7 +97,7 @@ public class Runner : ConsoleAppBase
     [RootCommand]
     public async Task Run()
     {
-        await command.SubscribeAsync("foo", () => Console.WriteLine("Yeah"));
+        await command.SubscribeAsync("foo", _ => Console.WriteLine("Yeah"));
         await command.PingAsync();
         await command.PublishAsync("foo");
     }

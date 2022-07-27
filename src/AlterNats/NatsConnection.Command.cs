@@ -380,20 +380,40 @@ public partial class NatsConnection : INatsCommand
 
     public ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action handler)
     {
-        return SubscribeAsync<byte[]>(key, _ => handler());
+        return SubscribeAsync<byte[]>(key, (_, _) => handler());
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action<NatsKey> handler)
+    {
+        return SubscribeAsync<byte[]>(key, (s,_) => handler(s));
     }
 
     public ValueTask<IDisposable> SubscribeAsync(string key, Action handler)
     {
-        return SubscribeAsync<byte[]>(key, _ => handler());
+        return SubscribeAsync<byte[]>(key, (_, _) => handler());
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync(string key, Action<NatsKey> handler)
+    {
+        return SubscribeAsync<byte[]>(key, (s,_) => handler(s));
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
     {
-        return SubscribeAsync(key.Key, handler);
+        return SubscribeAsync<T>(key.Key, (_,x)=> handler(x));
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<NatsKey,T> handler)
+    {
+        return SubscribeAsync<T>(key.Key, handler);
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
+    {
+        return SubscribeAsync<T>(key, (_,x)=>handler(x));
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<NatsKey,T> handler)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -410,18 +430,28 @@ public partial class NatsConnection : INatsCommand
 
     public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler)
     {
+        return SubscribeAsync<T>(key.Key, (_,x)=>asyncHandler(x));
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<NatsKey,T, Task> asyncHandler)
+    {
         return SubscribeAsync(key.Key, asyncHandler);
     }
 
     public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler)
     {
+        return SubscribeAsync<T>(key, (_, x) => asyncHandler(x));
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<NatsKey, T, Task> asyncHandler)
+    {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddAsync<T>(key, null, async x =>
+            return subscriptionManager.AddAsync<T>(key, null, async (s,x) =>
             {
                 try
                 {
-                    await asyncHandler(x).ConfigureAwait(false);
+                    await asyncHandler(s,x).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -433,11 +463,11 @@ public partial class NatsConnection : INatsCommand
         {
             return WithConnectAsync(key, asyncHandler, static (self, key, asyncHandler) =>
             {
-                return self.subscriptionManager.AddAsync<T>(key, null, async x =>
+                return self.subscriptionManager.AddAsync<T>(key, null, async (s,x) =>
                 {
                     try
                     {
-                        await asyncHandler(x).ConfigureAwait(false);
+                        await asyncHandler(s,x).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -449,6 +479,11 @@ public partial class NatsConnection : INatsCommand
     }
 
     public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
+    {
+        return QueueSubscribeAsync<T>(key, queueGroup, (_, x) => handler(x));
+    }
+
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<NatsKey,T> handler)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -465,6 +500,11 @@ public partial class NatsConnection : INatsCommand
 
     public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Action<T> handler)
     {
+        return QueueSubscribeAsync<T>(key, queueGroup, (_, x) => handler(x));
+    }
+
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Action<NatsKey,T> handler)
+    {
         if (ConnectionState == NatsConnectionState.Open)
         {
             return subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
@@ -480,13 +520,18 @@ public partial class NatsConnection : INatsCommand
 
     public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler)
     {
+         return QueueSubscribeAsync<T>(key, queueGroup, (_, x) => asyncHandler(x));
+    }
+
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<NatsKey,T, Task> asyncHandler)
+    {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
+            return subscriptionManager.AddAsync<T>(key.Key, queueGroup, async (s,x) =>
             {
                 try
                 {
-                    await asyncHandler(x).ConfigureAwait(false);
+                    await asyncHandler(s,x).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -498,11 +543,11 @@ public partial class NatsConnection : INatsCommand
         {
             return WithConnectAsync(key, queueGroup, asyncHandler, static (self, key, queueGroup, asyncHandler) =>
             {
-                return self.subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
+                return self.subscriptionManager.AddAsync<T>(key.Key, queueGroup, async (s,x) =>
                 {
                     try
                     {
-                        await asyncHandler(x).ConfigureAwait(false);
+                        await asyncHandler(s,x).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -515,13 +560,18 @@ public partial class NatsConnection : INatsCommand
 
     public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler)
     {
+        return QueueSubscribeAsync<T>(key, queueGroup, (_, x) => asyncHandler(x));
+    }
+
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Func<NatsKey,T, Task> asyncHandler)
+    {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
+            return subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async (s,x) =>
             {
                 try
                 {
-                    await asyncHandler(x).ConfigureAwait(false);
+                    await asyncHandler(s,x).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -533,11 +583,11 @@ public partial class NatsConnection : INatsCommand
         {
             return WithConnectAsync(key, queueGroup, asyncHandler, static (self, key, queueGroup, asyncHandler) =>
             {
-                return self.subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
+                return self.subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async (s,x) =>
                 {
                     try
                     {
-                        await asyncHandler(x).ConfigureAwait(false);
+                        await asyncHandler(s,x).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {

@@ -13,7 +13,7 @@ internal sealed class NatsObservable<T> : IObservable<T>
 
     public IDisposable Subscribe(IObserver<T> observer)
     {
-        return new FireAndForgetDisposable(connection.SubscribeAsync<T>(key, observer.OnNext), observer.OnError);
+        return new FireAndForgetDisposable(connection.SubscribeAsync<T>(key,(_,x)=> observer.OnNext(x)), observer.OnError);
     }
 
     sealed class FireAndForgetDisposable : IDisposable

@@ -27,7 +27,7 @@ internal sealed class SubscriptionManager : IDisposable
         }
     }
 
-    public async ValueTask<IDisposable> AddAsync<T>(string key, NatsKey? queueGroup, Action<T> handler)
+    public async ValueTask<IDisposable> AddAsync<T>(string key, NatsKey? queueGroup, Action<NatsKey, T> handler)
     {
         int sid;
         RefCountSubscription? subscription;
@@ -121,7 +121,7 @@ internal sealed class SubscriptionManager : IDisposable
         return returnSubscription;
     }
 
-    public async ValueTask<IDisposable> AddRequestHandlerAsync<TRequest, TResponse>(string key, Func<TRequest, Task<TResponse>> asyncHandler)
+    public async ValueTask<IDisposable> AddRequestHandlerAsync<TRequest, TResponse>(string key, Func<NatsKey,TRequest, Task<TResponse>> asyncHandler)
     {
         int sid;
         RefCountSubscription? subscription;
@@ -176,7 +176,7 @@ internal sealed class SubscriptionManager : IDisposable
         bySubscriptionId.Remove(subscriptionId, out _);
     }
 
-    public void PublishToClientHandlers(int subscriptionId, in ReadOnlySequence<byte> buffer)
+    public void PublishToClientHandlers(int subscriptionId,in NatsKey subject, in ReadOnlySequence<byte> buffer)
     {
         RefCountSubscription? subscription;
         object?[] list;
@@ -192,10 +192,10 @@ internal sealed class SubscriptionManager : IDisposable
             }
         }
 
-        MessagePublisher.Publish(subscription.ElementType, connection.Options, buffer, list);
+        MessagePublisher.Publish(subscription.ElementType, subject, connection.Options, buffer, list);
     }
 
-    public void PublishToRequestHandler(int subscriptionId, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
+    public void PublishToRequestHandler(int subscriptionId, in NatsKey subject, in NatsKey replyTo, in ReadOnlySequence<byte> buffer)
     {
         RefCountSubscription? subscription;
         object?[] list;

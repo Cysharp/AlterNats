@@ -43,7 +43,7 @@ internal sealed class RequestResponseManager : IDisposable
             if (globalSubscription == null)
             {
                 var globalSubscribeKey = $"{Encoding.ASCII.GetString(inBoxPrefix.Span)}*";
-                globalSubscription = await connection.SubscribeAsync<byte[]>(globalSubscribeKey, _ => { }).ConfigureAwait(false);
+                globalSubscription = await connection.SubscribeAsync<byte[]>(globalSubscribeKey, (_,_) => { }).ConfigureAwait(false);
             }
         }
         finally
@@ -71,7 +71,7 @@ internal sealed class RequestResponseManager : IDisposable
     }
 
 
-    public void PublishToResponseHandler(int id, in ReadOnlySequence<byte> buffer)
+    public void PublishToResponseHandler(int id, in NatsKey subject, in ReadOnlySequence<byte> buffer)
     {
         (Type responseType, object handler) box;
         lock (gate)
@@ -82,7 +82,7 @@ internal sealed class RequestResponseManager : IDisposable
             }
         }
 
-        ResponsePublisher.PublishResponse(box.responseType, connection.Options, buffer, box.handler);
+        ResponsePublisher.PublishResponse(box.responseType, connection.Options, subject, buffer, box.handler);
     }
 
     public bool Remove(int id)
