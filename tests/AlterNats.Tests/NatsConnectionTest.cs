@@ -1,30 +1,23 @@
-﻿using Cysharp.Diagnostics;
+﻿using System.Text;
 using MessagePack;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit.Abstractions;
 
 namespace AlterNats.Tests;
 
-public partial class NatsConnectionTest
+public abstract partial class NatsConnectionTest
 {
     readonly ITestOutputHelper output;
+    readonly TransportType transportType;
 
-    public NatsConnectionTest(ITestOutputHelper output)
+    protected NatsConnectionTest(ITestOutputHelper output, TransportType transportType)
     {
         this.output = output;
+        this.transportType = transportType;
     }
 
     [Fact]
     public async Task SimplePubSubTest()
     {
-        await using var server = new NatsServer(output);
+        await using var server = new NatsServer(output, transportType);
 
         await using var subConnection = server.CreateClientConnection();
         await using var pubConnection = server.CreateClientConnection();
@@ -57,7 +50,7 @@ public partial class NatsConnectionTest
     [Fact]
     public async Task EncodingTest()
     {
-        await using var server = new NatsServer(output);
+        await using var server = new NatsServer(output, transportType);
 
         var serializer1 = NatsOptions.Default.Serializer;
         var serializer2 = new MessagePackNatsSerializer();
@@ -97,7 +90,7 @@ public partial class NatsConnectionTest
     [InlineData(32768)] // 32 KiB
     public async Task RequestTest(int minSize)
     {
-        await using var server = new NatsServer(output);
+        await using var server = new NatsServer(output, transportType);
 
         var options = NatsOptions.Default with { RequestTimeout = TimeSpan.FromSeconds(5) };
         await using var subConnection = server.CreateClientConnection(options);
@@ -134,7 +127,12 @@ public partial class NatsConnectionTest
     [Fact]
     public async Task ReconnectSingleTest()
     {
-        await using var server = new NatsServer(output);
+        using var ports = new NatsServerPorts(new NatsServerPortOptions
+        {
+            WebSocket = transportType == TransportType.WebSocket,
+            ServerDisposeReturnsPorts = false
+        });
+        await using var server = new NatsServer(output, transportType, ports);
         var key = Guid.NewGuid().ToString();
 
         await using var subConnection = server.CreateClientConnection();
@@ -153,6 +151,7 @@ public partial class NatsConnectionTest
             {
                 waitForReceive300.Pulse();
             }
+
             if (x == 500)
             {
                 waitForReceiveFinish.Pulse();
@@ -177,7 +176,7 @@ public partial class NatsConnectionTest
 
         // start new nats server on same port
         output.WriteLine("START NEW SERVER");
-        await using var newServer = new NatsServer(output, server.Port);
+        await using var newServer = new NatsServer(output, transportType, ports);
         await subConnection.ConnectAsync(); // wait open again
         await pubConnection.ConnectAsync(); // wait open again
 
@@ -192,7 +191,7 @@ public partial class NatsConnectionTest
     [Fact(Timeout = 15000)]
     public async Task ReconnectClusterTest()
     {
-        await using var cluster = new NatsCluster(output);
+        await using var cluster = new NatsCluster(output, transportType);
         await Task.Delay(TimeSpan.FromSeconds(5)); // wait for cluster completely connected.
 
         var key = Guid.NewGuid().ToString();
@@ -205,9 +204,12 @@ public partial class NatsConnectionTest
         await connection2.ConnectAsync();
         await connection3.ConnectAsync();
 
-        output.WriteLine("Server1 ClientConnectUrls:" + String.Join(", ", connection1.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
-        output.WriteLine("Server2 ClientConnectUrls:" + String.Join(", ", connection2.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
-        output.WriteLine("Server3 ClientConnectUrls:" + String.Join(", ", connection3.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
+        output.WriteLine("Server1 ClientConnectUrls:" +
+                         String.Join(", ", connection1.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
+        output.WriteLine("Server2 ClientConnectUrls:" +
+                         String.Join(", ", connection2.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
+        output.WriteLine("Server3 ClientConnectUrls:" +
+                         String.Join(", ", connection3.ServerInfo?.ClientConnectUrls ?? Array.Empty<string>()));
 
         connection1.ServerInfo!.ClientConnectUrls!.Select(x => new NatsUri(x).Port).Distinct().Count().ShouldBe(3);
         connection2.ServerInfo!.ClientConnectUrls!.Select(x => new NatsUri(x).Port).Distinct().Count().ShouldBe(3);
@@ -224,6 +226,7 @@ public partial class NatsConnectionTest
             {
                 waitForReceive300.Pulse();
             }
+
             if (x == 500)
             {
                 waitForReceiveFinish.Pulse();
@@ -238,13 +241,14 @@ public partial class NatsConnectionTest
 
         var disconnectSignal = connection1.ConnectionDisconnectedAsAwaitable(); // register disconnect before kill
 
-        output.WriteLine($"TRY KILL SERVER1 Port:{cluster.Server1.Port}");
+        output.WriteLine($"TRY KILL SERVER1 Port:{cluster.Server1.Ports.ServerPort}");
         await cluster.Server1.DisposeAsync(); // process kill
         await disconnectSignal;
 
         await connection1.ConnectAsync(); // wait for reconnect complete.
 
-        connection1.ServerInfo!.Port.Should().BeOneOf(cluster.Server2.Port, cluster.Server3.Port);
+        connection1.ServerInfo!.Port.Should()
+            .BeOneOf(cluster.Server2.Ports.ServerPort, cluster.Server3.Ports.ServerPort);
 
         await connection2.PublishAsync(key, 400);
         await connection2.PublishAsync(key, 500);
@@ -258,6 +262,7 @@ public class SampleClass : IEquatable<SampleClass>
 {
     [Key(0)]
     public int Id { get; set; }
+
     [Key(1)]
     public string Name { get; set; }
 
