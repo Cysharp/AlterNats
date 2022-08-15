@@ -207,9 +207,9 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         // Connected completely but still ConnectionState is Connecting(require after receive INFO).
 
         // add CONNECT and PING command to priority lane
-        var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions);
+        var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions, GetCommandTimer(CancellationToken.None));
         writerState.PriorityCommands.Add(connectCommand);
-        writerState.PriorityCommands.Add(PingCommand.Create(pool));
+        writerState.PriorityCommands.Add(PingCommand.Create(pool, GetCommandTimer(CancellationToken.None)));
 
         // Run Reader/Writer LOOP start
         var waitForInfoSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -369,12 +369,12 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
                 }
 
                 // add CONNECT and PING command to priority lane
-                var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions);
+                var connectCommand = AsyncConnectCommand.Create(pool, Options.ConnectOptions, GetCommandTimer(CancellationToken.None));
                 writerState.PriorityCommands.Add(connectCommand);
-                writerState.PriorityCommands.Add(PingCommand.Create(pool));
+                writerState.PriorityCommands.Add(PingCommand.Create(pool, GetCommandTimer(CancellationToken.None)));
 
                 // Add SUBSCRIBE command to priority lane
-                var subscribeCommand = AsyncSubscribeBatchCommand.Create(pool, subscriptionManager.GetExistingSubscriptions());
+                var subscribeCommand = AsyncSubscribeBatchCommand.Create(pool, GetCommandTimer(CancellationToken.None), subscriptionManager.GetExistingSubscriptions());
                 writerState.PriorityCommands.Add(subscribeCommand);
 
                 // Run Reader/Writer LOOP start
@@ -495,7 +495,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     {
         return cancellationTimerPool.Start(Options.CommandTimeout, cancellationToken);
     }
-    
+
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     bool TryEnqueueCommand(ICommand command)
     {
@@ -509,7 +509,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             return false;
         }
     }
-    
+
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     void EnqueueCommandSync(ICommand command)
     {
@@ -537,13 +537,13 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         }
     }
 
-    async ValueTask EnqueueAndAwaitCommandAsync(IAsyncCommand command)
+    internal async ValueTask EnqueueAndAwaitCommandAsync(IAsyncCommand command)
     {
         await EnqueueCommandAsync(command).ConfigureAwait(false);
         await command.AsValueTask().ConfigureAwait(false);
     }
 
-    async ValueTask<T> EnqueueAndAwaitCommandAsync<T>(IAsyncCommand<T> command)
+    internal async ValueTask<T> EnqueueAndAwaitCommandAsync<T>(IAsyncCommand<T> command)
     {
         await EnqueueCommandAsync(command).ConfigureAwait(false);
         return await command.AsValueTask().ConfigureAwait(false);
@@ -551,12 +551,13 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
 
     internal ValueTask PostPongAsync()
     {
-        return EnqueueCommandAsync(PongCommand.Create(pool));
+        return EnqueueCommandAsync(PongCommand.Create(pool, GetCommandTimer(CancellationToken.None)));
     }
 
-    internal ValueTask SubscribeAsync(int subscriptionId, string subject, in NatsKey? queueGroup)
+    // called only internally
+    internal ValueTask SubscribeCoreAsync(int subscriptionId, string subject, in NatsKey? queueGroup, CancellationToken cancellationToken)
     {
-        var command = AsyncSubscribeCommand.Create(pool, subscriptionId, new NatsKey(subject, true), queueGroup);
+        var command = AsyncSubscribeCommand.Create(pool, GetCommandTimer(cancellationToken), subscriptionId, new NatsKey(subject, true), queueGroup);
         return EnqueueAndAwaitCommandAsync(command);
     }
 
@@ -701,13 +702,25 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
         await coreAsync(this, item1, item2).ConfigureAwait(false);
     }
 
+    async ValueTask WithConnectAsync<T1, T2, T3>(T1 item1, T2 item2, T3 item3, Func<NatsConnection, T1, T2, T3, ValueTask> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        await coreAsync(this, item1, item2, item3).ConfigureAwait(false);
+    }
+
+    async ValueTask WithConnectAsync<T1, T2, T3, T4>(T1 item1, T2 item2, T3 item3, T4 item4, Func<NatsConnection, T1, T2, T3, T4, ValueTask> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        await coreAsync(this, item1, item2, item3, item4).ConfigureAwait(false);
+    }
+
     async ValueTask<T> WithConnectAsync<T>(Func<NatsConnection, ValueTask<T>> coreAsync)
     {
         await ConnectAsync().ConfigureAwait(false);
         return await coreAsync(this).ConfigureAwait(false);
     }
 
-    async ValueTask<TResult> WithConnectAsync<T1, TResult>(T1 item1, Func<NatsConnection, T1,  ValueTask<TResult>> coreAsync)
+    async ValueTask<TResult> WithConnectAsync<T1, TResult>(T1 item1, Func<NatsConnection, T1, ValueTask<TResult>> coreAsync)
     {
         await ConnectAsync().ConfigureAwait(false);
         return await coreAsync(this, item1).ConfigureAwait(false);
@@ -723,5 +736,11 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     {
         await ConnectAsync().ConfigureAwait(false);
         return await coreAsync(this, item1, item2, item3).ConfigureAwait(false);
+    }
+
+    async ValueTask<TResult> WithConnectAsync<T1, T2, T3, T4, TResult>(T1 item1, T2 item2, T3 item3, T4 item4, Func<NatsConnection, T1, T2, T3, T4, ValueTask<TResult>> coreAsync)
+    {
+        await ConnectAsync().ConfigureAwait(false);
+        return await coreAsync(this, item1, item2, item3, item4).ConfigureAwait(false);
     }
 }

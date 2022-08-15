@@ -25,17 +25,17 @@ internal sealed class RequestResponseManager : IDisposable
         this.pool = pool;
     }
 
-    public ValueTask<RequestAsyncCommand<TRequest, TResponse?>> AddAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
+    public ValueTask<TResponse?> AddAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         if (globalSubscription == null)
         {
             return AddWithGlobalSubscribeAsync<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken);
         }
 
-        return new ValueTask<RequestAsyncCommand<TRequest, TResponse?>>(AddAsyncCore<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken));
+        return AddAsyncCoreAsync<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken);
     }
 
-    async ValueTask<RequestAsyncCommand<TRequest, TResponse?>> AddWithGlobalSubscribeAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
+    async ValueTask<TResponse?> AddWithGlobalSubscribeAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         await asyncLock.WaitAsync(cancellationTokenSource.Token).ConfigureAwait(false);
         try
@@ -51,13 +51,12 @@ internal sealed class RequestResponseManager : IDisposable
             asyncLock.Release();
         }
 
-        return AddAsyncCore<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken);
+        return await AddAsyncCoreAsync<TRequest, TResponse>(key, inBoxPrefix, request, cancellationToken).ConfigureAwait(false);
     }
 
-    RequestAsyncCommand<TRequest, TResponse?> AddAsyncCore<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
+    async ValueTask<TResponse?> AddAsyncCoreAsync<TRequest, TResponse>(NatsKey key, ReadOnlyMemory<byte> inBoxPrefix, TRequest request, CancellationToken cancellationToken)
     {
         var id = Interlocked.Increment(ref requestId);
-        // TODO:how use CancellationTimerPool?
         var command = RequestAsyncCommand<TRequest, TResponse?>.Create(pool, key, inBoxPrefix, id, request, connection.Options.Serializer, cancellationToken, this);
 
         lock (gate)
@@ -67,10 +66,9 @@ internal sealed class RequestResponseManager : IDisposable
             responseBoxes.Add(id, (typeof(TResponse), command));
         }
 
-        connection.PostCommand(command);
-        return command;
+        // MEMO: await has some performance loss, we should avoid await EnqueueAndAwait
+        return await connection.EnqueueAndAwaitCommandAsync(command).ConfigureAwait(false);
     }
-
 
     public void PublishToResponseHandler(int id, in ReadOnlySequence<byte> buffer)
     {

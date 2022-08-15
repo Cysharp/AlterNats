@@ -62,11 +62,11 @@ public partial class NatsConnection : INatsCommand
         }
     }
 
-    public ValueTask PublishAsync<T>(in NatsKey key, T value)
+    public ValueTask PublishAsync<T>(in NatsKey key, T value, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = AsyncPublishCommand<T>.Create(pool, key, value, Options.Serializer);
+            var command = AsyncPublishCommand<T>.Create(pool, GetCommandTimer(cancellationToken), key, value, Options.Serializer);
             if (TryEnqueueCommand(command))
             {
                 return command.AsValueTask();
@@ -78,46 +78,46 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(key, value, static (self, k, v) =>
+            return WithConnectAsync(key, value, cancellationToken, static (self, k, v, token) =>
             {
-                var command = AsyncPublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
+                var command = AsyncPublishCommand<T>.Create(self.pool, self.GetCommandTimer(token), k, v, self.Options.Serializer);
                 return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
 
     /// <summary>Publish empty message.</summary>
-    public ValueTask PublishAsync(string key)
+    public ValueTask PublishAsync(string key, CancellationToken cancellationToken = default)
     {
-        return PublishAsync(key, Array.Empty<byte>());
+        return PublishAsync(key, Array.Empty<byte>(), cancellationToken);
     }
 
     /// <summary>Publish empty message.</summary>
-    public ValueTask PublishAsync(in NatsKey key)
+    public ValueTask PublishAsync(in NatsKey key, CancellationToken cancellationToken = default)
     {
-        return PublishAsync(key, Array.Empty<byte>());
+        return PublishAsync(key, Array.Empty<byte>(), cancellationToken);
     }
 
-    public ValueTask PublishAsync<T>(string key, T value)
+    public ValueTask PublishAsync<T>(string key, T value, CancellationToken cancellationToken = default)
     {
-        return PublishAsync<T>(new NatsKey(key, true), value);
+        return PublishAsync<T>(new NatsKey(key, true), value, cancellationToken);
     }
 
-    public ValueTask PublishAsync(in NatsKey key, byte[] value)
+    public ValueTask PublishAsync(in NatsKey key, byte[] value, CancellationToken cancellationToken = default)
     {
-        return PublishAsync(key, new ReadOnlyMemory<byte>(value));
+        return PublishAsync(key, new ReadOnlyMemory<byte>(value), cancellationToken);
     }
 
-    public ValueTask PublishAsync(string key, byte[] value)
+    public ValueTask PublishAsync(string key, byte[] value, CancellationToken cancellationToken = default)
     {
-        return PublishAsync(new NatsKey(key, true), value);
+        return PublishAsync(new NatsKey(key, true), value, cancellationToken);
     }
 
-    public ValueTask PublishAsync(in NatsKey key, ReadOnlyMemory<byte> value)
+    public ValueTask PublishAsync(in NatsKey key, ReadOnlyMemory<byte> value, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = AsyncPublishBytesCommand.Create(pool, key, value);
+            var command = AsyncPublishBytesCommand.Create(pool, GetCommandTimer(cancellationToken), key, value);
             if (TryEnqueueCommand(command))
             {
                 return command.AsValueTask();
@@ -129,15 +129,15 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(key, value, static (self, k, v) =>
+            return WithConnectAsync(key, value, cancellationToken, static (self, k, v, token) =>
             {
-                var command = AsyncPublishBytesCommand.Create(self.pool, k, v);
+                var command = AsyncPublishBytesCommand.Create(self.pool, self.GetCommandTimer(token), k, v);
                 return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
 
-    public ValueTask PublishAsync(string key, ReadOnlyMemory<byte> value)
+    public ValueTask PublishAsync(string key, ReadOnlyMemory<byte> value, CancellationToken cancellationToken = default)
     {
         return PublishAsync(new NatsKey(key, true), value);
     }
@@ -158,14 +158,14 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = PublishCommand<T>.Create(pool, key, value, Options.Serializer);
+            var command = PublishCommand<T>.Create(pool, GetCommandTimer(CancellationToken.None), key, value, Options.Serializer);
             EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(key, value, static (self, k, v) =>
             {
-                var command = PublishCommand<T>.Create(self.pool, k, v, self.Options.Serializer);
+                var command = PublishCommand<T>.Create(self.pool, self.GetCommandTimer(CancellationToken.None), k, v, self.Options.Serializer);
                 self.EnqueueCommandSync(command);
             });
         }
@@ -190,14 +190,14 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = PublishBytesCommand.Create(pool, key, value);
+            var command = PublishBytesCommand.Create(pool, GetCommandTimer(CancellationToken.None), key, value);
             EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(key, value, static (self, k, v) =>
             {
-                var command = PublishBytesCommand.Create(self.pool, k, v);
+                var command = PublishBytesCommand.Create(self.pool, self.GetCommandTimer(CancellationToken.None), k, v);
                 self.EnqueueCommandSync(command);
             });
         }
@@ -208,11 +208,11 @@ public partial class NatsConnection : INatsCommand
         PostPublish(new NatsKey(key, true), value);
     }
 
-    public ValueTask PublishBatchAsync<T>(IEnumerable<(NatsKey, T?)> values)
+    public ValueTask PublishBatchAsync<T>(IEnumerable<(NatsKey, T?)> values, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            var command = AsyncPublishBatchCommand<T>.Create(pool, GetCommandTimer(cancellationToken), values, Options.Serializer);
             if (TryEnqueueCommand(command))
             {
                 return command.AsValueTask();
@@ -224,19 +224,19 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(values, static (self, v) =>
+            return WithConnectAsync(values, cancellationToken, static (self, v, token) =>
             {
-                var command = AsyncPublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
+                var command = AsyncPublishBatchCommand<T>.Create(self.pool, self.GetCommandTimer(token), v, self.Options.Serializer);
                 return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
     }
 
-    public ValueTask PublishBatchAsync<T>(IEnumerable<(string, T?)> values)
+    public ValueTask PublishBatchAsync<T>(IEnumerable<(string, T?)> values, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = AsyncPublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            var command = AsyncPublishBatchCommand<T>.Create(pool, GetCommandTimer(cancellationToken), values, Options.Serializer);
             if (TryEnqueueCommand(command))
             {
                 return command.AsValueTask();
@@ -248,9 +248,9 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(values, static (self, values) =>
+            return WithConnectAsync(values, cancellationToken, static (self, values, token) =>
             {
-                var command = AsyncPublishBatchCommand<T>.Create(self.pool, values, self.Options.Serializer);
+                var command = AsyncPublishBatchCommand<T>.Create(self.pool, self.GetCommandTimer(token), values, self.Options.Serializer);
                 return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
@@ -260,14 +260,14 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            var command = PublishBatchCommand<T>.Create(pool, GetCommandTimer(CancellationToken.None), values, Options.Serializer);
             EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(values, static (self, v) =>
             {
-                var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
+                var command = PublishBatchCommand<T>.Create(self.pool, self.GetCommandTimer(CancellationToken.None), v, self.Options.Serializer);
                 self.EnqueueCommandSync(command);
             });
         }
@@ -277,18 +277,20 @@ public partial class NatsConnection : INatsCommand
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = PublishBatchCommand<T>.Create(pool, values, Options.Serializer);
+            var command = PublishBatchCommand<T>.Create(pool, GetCommandTimer(CancellationToken.None), values, Options.Serializer);
             EnqueueCommandSync(command);
         }
         else
         {
             WithConnect(values, static (self, v) =>
             {
-                var command = PublishBatchCommand<T>.Create(self.pool, v, self.Options.Serializer);
+                var command = PublishBatchCommand<T>.Create(self.pool, self.GetCommandTimer(CancellationToken.None), v, self.Options.Serializer);
                 self.EnqueueCommandSync(command);
             });
         }
     }
+
+    // DirectWrite is not supporting CancellationTimer
 
     public void PostDirectWrite(string protocol, int repeatCount = 1)
     {
@@ -338,35 +340,27 @@ public partial class NatsConnection : INatsCommand
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     public async ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default)
     {
-        var timer = CancellationTimer.Rent(pool, disposedCancellationTokenSource.Token);
-        var linkedToken = cancellationToken.CanBeCanceled
-            ? CancellationTokenSource.CreateLinkedTokenSource(timer.Token, cancellationToken)
-            : null;
+        var timer = GetCommandTimer(cancellationToken);
         try
         {
-            var token = (linkedToken != null) ? linkedToken.Token : timer.Token;
-
-            RequestAsyncCommand<TRequest, TResponse?> command;
+            TResponse? response;
             if (ConnectionState == NatsConnectionState.Open)
             {
-                command = await requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request, token).ConfigureAwait(false);
+                response = await requestResponseManager.AddAsync<TRequest, TResponse>(key, indBoxPrefix, request, timer.Token).ConfigureAwait(false);
             }
             else
             {
-                command = await WithConnectAsync(key, request, token, static (self, key, request, token) =>
+                response = await WithConnectAsync(key, request, timer.Token, static (self, key, request, token) =>
                 {
                     return self.requestResponseManager.AddAsync<TRequest, TResponse>(key, self.indBoxPrefix, request, token);
                 }).ConfigureAwait(false);
             }
 
-            timer.CancelAfter(Options.RequestTimeout);
-
-            return await command.AsValueTask().ConfigureAwait(false);
+            return response;
         }
         finally
         {
-            linkedToken?.Dispose();
-            timer.Return(pool);
+            timer.TryReturn();
         }
     }
 
@@ -375,82 +369,82 @@ public partial class NatsConnection : INatsCommand
         return RequestAsync<TRequest, TResponse>(new NatsKey(key, true), request, cancellationToken);
     }
 
-    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> requestHandler)
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, TResponse> requestHandler, CancellationToken cancellationToken = default)
+    {
+        return SubscribeRequestAsync(key.Key, requestHandler, cancellationToken);
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> requestHandler, CancellationToken cancellationToken = default)
+    {
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            return subscriptionManager.AddRequestHandlerAsync(key, requestHandler, cancellationToken);
+        }
+        else
+        {
+            return WithConnectAsync(key, requestHandler, cancellationToken, static (self, key, requestHandler, token) =>
+            {
+                return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler, token);
+            });
+        }
+    }
+
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, Task<TResponse>> requestHandler, CancellationToken cancellationToken = default)
     {
         return SubscribeRequestAsync(key.Key, requestHandler);
     }
 
-    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, TResponse> requestHandler)
+    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, Task<TResponse>> requestHandler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+            return subscriptionManager.AddRequestHandlerAsync(key, requestHandler, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, requestHandler, static (self, key, requestHandler) =>
+            return WithConnectAsync(key, requestHandler, cancellationToken, static (self, key, requestHandler, token) =>
             {
-                return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+                return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler, token);
             });
         }
     }
 
-    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(in NatsKey key, Func<TRequest, Task<TResponse>> requestHandler)
+    public ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action handler, CancellationToken cancellationToken = default)
     {
-        return SubscribeRequestAsync(key.Key, requestHandler);
+        return SubscribeAsync<byte[]>(key, _ => handler(), cancellationToken);
     }
 
-    public ValueTask<IDisposable> SubscribeRequestAsync<TRequest, TResponse>(string key, Func<TRequest, Task<TResponse>> requestHandler)
+    public ValueTask<IDisposable> SubscribeAsync(string key, Action handler, CancellationToken cancellationToken = default)
+    {
+        return SubscribeAsync<byte[]>(key, _ => handler(), cancellationToken);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler, CancellationToken cancellationToken = default)
+    {
+        return SubscribeAsync(key.Key, handler, cancellationToken);
+    }
+
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+            return subscriptionManager.AddAsync(key, null, handler, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, requestHandler, static (self, key, requestHandler) =>
+            return WithConnectAsync(key, handler, cancellationToken, static (self, key, handler, token) =>
             {
-                return self.subscriptionManager.AddRequestHandlerAsync(key, requestHandler);
+                return self.subscriptionManager.AddAsync(key, null, handler, token);
             });
         }
     }
 
-    public ValueTask<IDisposable> SubscribeAsync(in NatsKey key, Action handler)
-    {
-        return SubscribeAsync<byte[]>(key, _ => handler());
-    }
-
-    public ValueTask<IDisposable> SubscribeAsync(string key, Action handler)
-    {
-        return SubscribeAsync<byte[]>(key, _ => handler());
-    }
-
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Action<T> handler)
-    {
-        return SubscribeAsync(key.Key, handler);
-    }
-
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Action<T> handler)
-    {
-        if (ConnectionState == NatsConnectionState.Open)
-        {
-            return subscriptionManager.AddAsync(key, null, handler);
-        }
-        else
-        {
-            return WithConnectAsync(key, handler, static (self, key, handler) =>
-            {
-                return self.subscriptionManager.AddAsync(key, null, handler);
-            });
-        }
-    }
-
-    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> SubscribeAsync<T>(in NatsKey key, Func<T, Task> asyncHandler, CancellationToken cancellationToken = default)
     {
         return SubscribeAsync(key.Key, asyncHandler);
     }
 
-    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> SubscribeAsync<T>(string key, Func<T, Task> asyncHandler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -464,11 +458,11 @@ public partial class NatsConnection : INatsCommand
                 {
                     logger.LogError(ex, "Error occured during subscribe message.");
                 }
-            });
+            }, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, asyncHandler, static (self, key, asyncHandler) =>
+            return WithConnectAsync(key, asyncHandler, cancellationToken, static (self, key, asyncHandler, token) =>
             {
                 return self.subscriptionManager.AddAsync<T>(key, null, async x =>
                 {
@@ -480,42 +474,42 @@ public partial class NatsConnection : INatsCommand
                     {
                         self.logger.LogError(ex, "Error occured during subscribe message.");
                     }
-                });
+                }, token);
             });
         }
     }
 
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Action<T> handler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddAsync(key.Key, queueGroup, handler);
+            return subscriptionManager.AddAsync(key.Key, queueGroup, handler, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, queueGroup, handler, static (self, key, queueGroup, handler) =>
+            return WithConnectAsync(key, queueGroup, handler, cancellationToken, static (self, key, queueGroup, handler, token) =>
             {
-                return self.subscriptionManager.AddAsync(key.Key, queueGroup, handler);
+                return self.subscriptionManager.AddAsync(key.Key, queueGroup, handler, token);
             });
         }
     }
 
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Action<T> handler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Action<T> handler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            return subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
+            return subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, queueGroup, handler, static (self, key, queueGroup, handler) =>
+            return WithConnectAsync(key, queueGroup, handler, cancellationToken, static (self, key, queueGroup, handler, token) =>
             {
-                return self.subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler);
+                return self.subscriptionManager.AddAsync(key, new NatsKey(queueGroup, true), handler, token);
             });
         }
     }
 
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(in NatsKey key, in NatsKey queueGroup, Func<T, Task> asyncHandler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -529,11 +523,11 @@ public partial class NatsConnection : INatsCommand
                 {
                     logger.LogError(ex, "Error occured during subscribe message.");
                 }
-            });
+            }, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, queueGroup, asyncHandler, static (self, key, queueGroup, asyncHandler) =>
+            return WithConnectAsync(key, queueGroup, asyncHandler, cancellationToken, static (self, key, queueGroup, asyncHandler, token) =>
             {
                 return self.subscriptionManager.AddAsync<T>(key.Key, queueGroup, async x =>
                 {
@@ -545,12 +539,12 @@ public partial class NatsConnection : INatsCommand
                     {
                         self.logger.LogError(ex, "Error occured during subscribe message.");
                     }
-                });
+                }, token);
             });
         }
     }
 
-    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler)
+    public ValueTask<IDisposable> QueueSubscribeAsync<T>(string key, string queueGroup, Func<T, Task> asyncHandler, CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
@@ -564,11 +558,11 @@ public partial class NatsConnection : INatsCommand
                 {
                     logger.LogError(ex, "Error occured during subscribe message.");
                 }
-            });
+            }, cancellationToken);
         }
         else
         {
-            return WithConnectAsync(key, queueGroup, asyncHandler, static (self, key, queueGroup, asyncHandler) =>
+            return WithConnectAsync(key, queueGroup, asyncHandler, cancellationToken, static (self, key, queueGroup, asyncHandler, token) =>
             {
                 return self.subscriptionManager.AddAsync<T>(key, new NatsKey(queueGroup, true), async x =>
                 {
@@ -580,7 +574,7 @@ public partial class NatsConnection : INatsCommand
                     {
                         self.logger.LogError(ex, "Error occured during subscribe message.");
                     }
-                });
+                }, token);
             });
         }
     }
@@ -595,11 +589,11 @@ public partial class NatsConnection : INatsCommand
         return new NatsObservable<T>(this, key);
     }
 
-    public ValueTask FlushAsync()
+    public ValueTask FlushAsync(CancellationToken cancellationToken = default)
     {
         if (ConnectionState == NatsConnectionState.Open)
         {
-            var command = AsyncFlushCommand.Create(pool);
+            var command = AsyncFlushCommand.Create(pool, GetCommandTimer(cancellationToken));
             if (TryEnqueueCommand(command))
             {
                 return command.AsValueTask();
@@ -611,9 +605,9 @@ public partial class NatsConnection : INatsCommand
         }
         else
         {
-            return WithConnectAsync(static self =>
+            return WithConnectAsync(cancellationToken, static (self, token) =>
             {
-                var command = AsyncFlushCommand.Create(self.pool);
+                var command = AsyncFlushCommand.Create(self.pool, self.GetCommandTimer(token));
                 return self.EnqueueAndAwaitCommandAsync(command);
             });
         }
