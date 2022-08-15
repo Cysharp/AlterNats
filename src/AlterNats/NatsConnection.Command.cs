@@ -340,7 +340,7 @@ public partial class NatsConnection : INatsCommand
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     public async ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default)
     {
-        var timer = GetCommandTimer(cancellationToken);
+        var timer = GetRequestCommandTimer(cancellationToken);
         try
         {
             TResponse? response;

@@ -497,6 +497,12 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    CancellationTimer GetRequestCommandTimer(CancellationToken cancellationToken)
+    {
+        return cancellationTimerPool.Start(Options.RequestTimeout, cancellationToken);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     bool TryEnqueueCommand(ICommand command)
     {
         if (commandWriter.TryWrite(command))

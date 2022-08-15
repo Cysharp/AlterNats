@@ -13,7 +13,9 @@ internal sealed class NatsObservable<T> : IObservable<T>
 
     public IDisposable Subscribe(IObserver<T> observer)
     {
-        return new FireAndForgetDisposable(connection.SubscribeAsync<T>(key, observer.OnNext), observer.OnError);
+        var disp = new CancellationTokenDisposable();
+        var disp2 = new FireAndForgetDisposable(connection.SubscribeAsync<T>(key, observer.OnNext, disp.Token), observer.OnError);
+        return new Tuple2Disposable(disp, disp2);
     }
 
     sealed class FireAndForgetDisposable : IDisposable
@@ -63,6 +65,47 @@ internal sealed class NatsObservable<T> : IObservable<T>
                     taskDisposable.Dispose();
                 }
             }
+        }
+    }
+
+    internal class CancellationTokenDisposable : IDisposable
+    {
+        bool disposed;
+        readonly CancellationTokenSource cancellationTokenSource;
+
+        public CancellationToken Token => cancellationTokenSource.Token;
+
+        public CancellationTokenDisposable()
+        {
+            this.cancellationTokenSource = new CancellationTokenSource();
+        }
+
+        public void Dispose()
+        {
+            if (!disposed)
+            {
+                disposed = true;
+                cancellationTokenSource.Cancel();
+                cancellationTokenSource.Dispose();
+            }
+        }
+    }
+
+    internal class Tuple2Disposable : IDisposable
+    {
+        readonly IDisposable disposable1;
+        readonly IDisposable disposable2;
+
+        public Tuple2Disposable(IDisposable disposable1, IDisposable disposable2)
+        {
+            this.disposable1 = disposable1;
+            this.disposable2 = disposable2;
+        }
+
+        public void Dispose()
+        {
+            this.disposable1.Dispose();
+            this.disposable2.Dispose();
         }
     }
 }
