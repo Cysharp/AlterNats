@@ -101,7 +101,7 @@ internal sealed class RequestResponseManager : IDisposable
             {
                 if (item.Value.handler is IPromise p)
                 {
-                    p.SetCanceled(CancellationToken.None);
+                    p.SetCanceled();
                 }
             }
             responseBoxes.Clear();

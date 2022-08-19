@@ -114,7 +114,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
         ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
     }
 
-    public void SetCanceled(CancellationToken cancellationToken)
+    public void SetCanceled()
     {
         if (noReturn) return;
 
@@ -124,8 +124,12 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
         noReturn = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
         {
-            state.self.core.SetException(new OperationCanceledException(state.cancellationToken));
-        }, (self: this, cancellationToken), preferLocal: false);
+            var ex = (state.timer != null)
+                ? state.timer.GetExceptionWhenCanceled()
+                : new OperationCanceledException();
+
+            state.core.SetException(ex);
+        }, this, preferLocal: false);
     }
 
     public void SetException(Exception exception)
@@ -188,8 +192,7 @@ internal abstract class AsyncCommandBase<TSelf> : ICommand, IAsyncCommand, IObje
     {
         var self = (AsyncCommandBase<TSelf>)state!;
         self.IsCanceled = true;
-        var token = self.timer?.GetCanceledToken() ?? CancellationToken.None;
-        self.SetCanceled(token);
+        self.SetCanceled();
     }
 }
 
@@ -258,7 +261,7 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
         ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
     }
 
-    public void SetCanceled(CancellationToken cancellationToken)
+    public void SetCanceled()
     {
         if (noReturn) return;
 
@@ -268,8 +271,12 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
         noReturn = true;
         ThreadPool.UnsafeQueueUserWorkItem(state =>
         {
-            state.self.core.SetException(new OperationCanceledException(state.cancellationToken));
-        }, (self: this, cancellationToken), preferLocal: false);
+            var ex = (state.timer != null)
+                ? state.timer.GetExceptionWhenCanceled()
+                : new OperationCanceledException();
+
+            state.core.SetException(ex);
+        }, this, preferLocal: false);        
     }
 
     public void SetException(Exception exception)
@@ -333,7 +340,6 @@ internal abstract class AsyncCommandBase<TSelf, TResponse> : ICommand, IAsyncCom
     {
         var self = (AsyncCommandBase<TSelf, TResponse>)state!;
         self.IsCanceled = true;
-        var token = self.timer?.GetCanceledToken() ?? CancellationToken.None;
-        self.SetCanceled(token);
+        self.SetCanceled();
     }
 }

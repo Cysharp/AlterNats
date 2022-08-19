@@ -441,7 +441,7 @@ internal sealed class NatsReadProtocolProcessor : IAsyncDisposable
             await readLoop.ConfigureAwait(false); // wait for drain buffer.
             foreach (var item in pingCommands)
             {
-                item.SetCanceled(CancellationToken.None);
+                item.SetCanceled();
             }
             waitForInfoSignal.TrySetCanceled();
             waitForPongOrErrorSignal.TrySetCanceled();

@@ -30,17 +30,31 @@ internal sealed class CancellationTimer : IObjectPoolNode<CancellationTimer>
     readonly ObjectPool pool;
 
     bool calledExternalTokenCancel;
+    TimeSpan timeout;
+    CancellationToken rootToken;
     CancellationToken externalCancellationToken;
     CancellationTokenRegistration externalTokenRegistration;
 
     public CancellationToken Token => cancellationTokenSource.Token;
 
-    public CancellationToken GetCanceledToken() => calledExternalTokenCancel ? externalCancellationToken : cancellationTokenSource.Token;
+    public Exception GetExceptionWhenCanceled()
+    {
+        if (rootToken.IsCancellationRequested)
+        {
+            return new NatsException("Operation is canceled because connection is disposed.");
+        }
+        if (externalCancellationToken.IsCancellationRequested)
+        {
+            return new OperationCanceledException(externalCancellationToken);
+        }
+        return new TimeoutException($"Nats operation is canceled due to the configured timeout of {timeout.TotalSeconds} seconds elapsing.");
+    }
 
     // this timer pool is tightly coupled with rootToken lifetime(e.g. connection lifetime).
     public CancellationTimer(ObjectPool pool, CancellationToken rootToken)
     {
         this.pool = pool;
+        this.rootToken = rootToken;
         this.cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(rootToken);
     }
 
@@ -63,6 +77,7 @@ internal sealed class CancellationTimer : IObjectPoolNode<CancellationTimer>
             }, self);
         }
 
+        self.timeout = timeout;
         self.cancellationTokenSource.CancelAfter(timeout);
         return self;
     }
@@ -86,6 +101,7 @@ internal sealed class CancellationTimer : IObjectPoolNode<CancellationTimer>
             calledExternalTokenCancel = false;
             externalCancellationToken = default;
             externalTokenRegistration = default;
+            timeout = TimeSpan.Zero;
 
             pool.Return(this);
             return true;

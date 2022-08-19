@@ -485,7 +485,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             }
         }
         // Can not add PING, set fail.
-        pingCommand.SetCanceled(CancellationToken.None);
+        pingCommand.SetCanceled();
     }
 
     // internal commands.
@@ -633,7 +633,7 @@ public partial class NatsConnection : IAsyncDisposable, INatsCommand
             }
             foreach (var item in writerState.PendingPromises)
             {
-                item.SetCanceled(CancellationToken.None);
+                item.SetCanceled();
             }
             subscriptionManager.Dispose();
             requestResponseManager.Dispose();

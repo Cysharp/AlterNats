@@ -337,6 +337,21 @@ public partial class NatsConnection : INatsCommand
         }
     }
 
+    internal void PostDirectWrite(ICommand command)
+    {
+        if (ConnectionState == NatsConnectionState.Open)
+        {
+            EnqueueCommandSync(command);
+        }
+        else
+        {
+            WithConnect(command, static (self, command) =>
+            {
+                self.EnqueueCommandSync(command);
+            });
+        }
+    }
+
     [AsyncMethodBuilderAttribute(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
     public async ValueTask<TResponse?> RequestAsync<TRequest, TResponse>(NatsKey key, TRequest request, CancellationToken cancellationToken = default)
     {
