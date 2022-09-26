@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using MemoryPack;
 using MessagePack;
 
 namespace AlterNats.Tests;
@@ -305,6 +306,64 @@ public class SampleClass : IEquatable<SampleClass>
         }
 
         return Equals((SampleClass)obj);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Id, Name);
+    }
+
+    public override string ToString()
+    {
+        return $"{Id}-{Name}";
+    }
+}
+
+[MemoryPackable]
+public partial class SampleClassForMemoryPack
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+
+    public SampleClassForMemoryPack(int id, string name)
+    {
+        Id = id;
+        Name = name;
+    }
+
+    public bool Equals(SampleClassForMemoryPack? other)
+    {
+        if (ReferenceEquals(null, other))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
+        return Id == other.Id && Name == other.Name;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        if (ReferenceEquals(null, obj))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, obj))
+        {
+            return true;
+        }
+
+        if (obj.GetType() != GetType())
+        {
+            return false;
+        }
+
+        return Equals((SampleClassForMemoryPack)obj);
     }
 
     public override int GetHashCode()

@@ -1,13 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net7.0</TargetFramework>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn);CS8002</NoWarn>
         <ImplicitUsings>enable</ImplicitUsings>
         <RunSettingsFilePath>$(MSBuildProjectDirectory)\test.runsettings</RunSettingsFilePath>
         <IsPackable>false</IsPackable>
+
+        <EnablePreviewFeatures>True</EnablePreviewFeatures>
     </PropertyGroup>
 
     <ItemGroup>
@@ -28,6 +30,7 @@
         <Using Include="AlterNats" />
         <Using Include="AlterNats.Internal" />
         <Using Include="AlterNats.Commands" />
+        <ProjectReference Include="..\..\AlterNats.MemoryPack\AlterNats.MemoryPack.csproj" />
         <ProjectReference Include="..\..\src\AlterNats.MessagePack\AlterNats.MessagePack.csproj" />
         <ProjectReference Include="..\..\src\AlterNats\AlterNats.csproj" />
     </ItemGroup>
