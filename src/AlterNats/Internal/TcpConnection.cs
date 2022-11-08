@@ -1,5 +1,6 @@
 ﻿using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace AlterNats.Internal;
 
@@ -29,8 +30,13 @@ internal sealed class TcpConnection : ISocketConnection
         }
 
         socket.NoDelay = true;
-        socket.SendBufferSize = 0;
-        socket.ReceiveBufferSize = 0;
+
+        // see https://github.com/dotnet/corefx/pull/17853/files
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            socket.SendBufferSize = 0;
+            socket.ReceiveBufferSize = 0;
+        }
     }
 
     // CancellationToken is not used, operation lifetime is completely same as socket.
