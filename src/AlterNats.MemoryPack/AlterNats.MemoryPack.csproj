@@ -1,18 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <EnablePreviewFeatures>True</EnablePreviewFeatures>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="MemoryPack" Version="0.0.1" />
+        <PackageReference Include="MemoryPack" Version="1.9.13" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\src\AlterNats\AlterNats.csproj" />
+      <ProjectReference Include="..\AlterNats\AlterNats.csproj" />
     </ItemGroup>
 
 </Project>

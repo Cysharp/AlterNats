@@ -13,11 +13,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="FluentAssertions" Version="6.5.1" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
-        <PackageReference Include="ProcessX" Version="1.5.4" />
-        <PackageReference Include="xunit" Version="2.4.1" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
+        <PackageReference Include="FluentAssertions" Version="6.9.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.1" />
+        <PackageReference Include="ProcessX" Version="1.5.5" />
+        <PackageReference Include="xunit" Version="2.4.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
@@ -31,6 +31,7 @@
         <Using Include="AlterNats.Internal" />
         <Using Include="AlterNats.Commands" />
         <ProjectReference Include="..\..\AlterNats.MemoryPack\AlterNats.MemoryPack.csproj" />
+        <ProjectReference Include="..\..\src\AlterNats.MemoryPack\AlterNats.MemoryPack.csproj" />
         <ProjectReference Include="..\..\src\AlterNats.MessagePack\AlterNats.MessagePack.csproj" />
         <ProjectReference Include="..\..\src\AlterNats\AlterNats.csproj" />
     </ItemGroup>

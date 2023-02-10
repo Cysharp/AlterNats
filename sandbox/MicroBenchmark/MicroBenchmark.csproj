@@ -9,11 +9,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
-        <PackageReference Include="StackExchange.Redis" Version="2.5.43" />
-        <PackageReference Include="ZLogger" Version="1.6.1" />
-        <PackageReference Include="NATS.Client" Version="0.14.5" />
+        <PackageReference Include="BenchmarkDotNet" Version="0.13.4" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
+        <PackageReference Include="StackExchange.Redis" Version="2.6.90" />
+        <PackageReference Include="ZLogger" Version="1.7.0" />
+        <PackageReference Include="NATS.Client" Version="1.0.3" />
     </ItemGroup>
 
     <ItemGroup>

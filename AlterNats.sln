@@ -41,7 +41,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorWasm.Server", "sandbo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorWasm.Shared", "sandbox\BlazorWasm\Shared\BlazorWasm.Shared.csproj", "{35D141D0-F80A-4E9B-A2AA-A1AEA925C9C2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AlterNats.MemoryPack", "AlterNats.MemoryPack\AlterNats.MemoryPack.csproj", "{D1C97A3D-CC7A-4F8A-B9F0-01BE332195A5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AlterNats.MemoryPack", "src\AlterNats.MemoryPack\AlterNats.MemoryPack.csproj", "{D1C97A3D-CC7A-4F8A-B9F0-01BE332195A5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

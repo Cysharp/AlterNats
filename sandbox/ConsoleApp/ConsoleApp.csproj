@@ -10,12 +10,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ConsoleAppFramework" Version="4.0.6" />
-        <PackageReference Include="JetBrains.Profiler.Api" Version="1.1.8" />
-        <PackageReference Include="MessagePack" Version="2.3.85" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
-        <PackageReference Include="ZLogger" Version="1.6.1" />
-        <PackageReference Include="ProcessX" Version="1.5.4" />
+        <PackageReference Include="ConsoleAppFramework" Version="4.2.4" />
+        <PackageReference Include="JetBrains.Profiler.Api" Version="1.3.0" />
+        <PackageReference Include="MessagePack" Version="2.4.59" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
+        <PackageReference Include="ZLogger" Version="1.7.0" />
+        <PackageReference Include="ProcessX" Version="1.5.5" />
     </ItemGroup>
 
     <ItemGroup>
