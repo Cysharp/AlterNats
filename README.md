@@ -1,3 +1,5 @@
+# **AlterNats is no longer maintained. Please check the official v2 client [nats-io/nats.net.v2e](https://github.com/nats-io/nats.net.v2) and [announcement blog](https://nats.io/blog/nats-dotnet-v2-alpha-release/).**
+
 # AlterNats
 [![GitHub Actions](https://github.com/Cysharp/AlterNats/workflows/Build-Debug/badge.svg)](https://github.com/Cysharp/AlterNats/actions) [![Releases](https://img.shields.io/github/release/Cysharp/AlterNats.svg)](https://github.com/Cysharp/AlterNats/releases)
 
